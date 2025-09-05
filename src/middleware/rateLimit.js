@@ -1,202 +1,260 @@
-// src/middleware/rateLimiting.js
 import rateLimit from 'express-rate-limit';
 import { redisClient } from '../config/redis.js';
 import { logger } from '../utils/logger.js';
 
-// Redis store for express-rate-limit v7
-class RedisStore {
-  constructor(options = {}) {
-    this.prefix = options.prefix || 'rl:';
-    this.client = redisClient;
-    this.windowMs = options.windowMs || 15 * 60 * 1000;
+// Simple Memory Store (fallback when Redis fails)
+class MemoryStore {
+  constructor() {
+    this.store = new Map();
   }
 
   async increment(key) {
-    const fullKey = this.prefix + key;
-    const current = await this.client.incr(fullKey);
-
-    if (current === 1) {
-      await this.client.expire(fullKey, Math.floor(this.windowMs / 1000));
+    const now = Date.now();
+    const record = this.store.get(key) || { count: 0, resetTime: now + 15 * 60 * 1000 };
+    
+    if (now > record.resetTime) {
+      record.count = 1;
+      record.resetTime = now + 15 * 60 * 1000;
+    } else {
+      record.count++;
     }
-
+    
+    this.store.set(key, record);
+    
     return {
-      totalHits: current,
-      resetTime: new Date(Date.now() + this.windowMs)
+      totalHits: record.count,
+      resetTime: new Date(record.resetTime)
     };
   }
 
   async decrement(key) {
-    const fullKey = this.prefix + key;
-    const current = await this.client.decr(fullKey);
-    return Math.max(0, current);
+    const record = this.store.get(key);
+    if (record && record.count > 0) {
+      record.count--;
+      this.store.set(key, record);
+      return record.count;
+    }
+    return 0;
   }
 
   async resetKey(key) {
-    await this.client.del(this.prefix + key);
+    this.store.delete(key);
+  }
+}
+
+// Redis Store with error handling
+class RedisStore {
+  constructor(options = {}) {
+    this.prefix = options.prefix || 'rl:';
+    this.windowMs = options.windowMs || 15 * 60 * 1000;
+    this.client = redisClient;
+    this.fallbackStore = new MemoryStore();
   }
 
-  async resetAll() {
-    const keys = await this.client.keys(this.prefix + '*');
-    if (keys.length) {
-      await this.client.del(keys);
+  async increment(key) {
+    try {
+      // Check if Redis client is ready
+      if (!this.client || !this.client.isReady) {
+        logger.warn('Redis not ready, using memory store');
+        return await this.fallbackStore.increment(key);
+      }
+
+      const fullKey = this.prefix + key;
+      
+      // Use Redis v4+ syntax
+      const current = await this.client.incr(fullKey);
+      
+      if (current === 1) {
+        await this.client.expire(fullKey, Math.ceil(this.windowMs / 1000));
+      }
+      
+      return {
+        totalHits: current,
+        resetTime: new Date(Date.now() + this.windowMs)
+      };
+    } catch (error) {
+      logger.warn('Redis rate limit error, using memory store:', error.message);
+      return await this.fallbackStore.increment(key);
+    }
+  }
+
+  async decrement(key) {
+    try {
+      if (!this.client || !this.client.isReady) {
+        return await this.fallbackStore.decrement(key);
+      }
+
+      const fullKey = this.prefix + key;
+      const current = await this.client.decr(fullKey);
+      return Math.max(0, current);
+    } catch (error) {
+      logger.warn('Redis decrement error:', error.message);
+      return await this.fallbackStore.decrement(key);
+    }
+  }
+
+  async resetKey(key) {
+    try {
+      if (!this.client || !this.client.isReady) {
+        return await this.fallbackStore.resetKey(key);
+      }
+
+      const fullKey = this.prefix + key;
+      await this.client.del(fullKey);
+    } catch (error) {
+      logger.warn('Redis reset error:', error.message);
+      await this.fallbackStore.resetKey(key);
     }
   }
 }
 
-// Helper برای ایجاد handler با لاگ
-const createHandler = (message, logData = {}) => (req, res) => {
-  logger.warn('Rate limit exceeded', {
-    ip: req.ip,
-    url: req.originalUrl,
-    user: req.user?.email,
-    fileCount: req.files?.length || 0,
-    ...logData
-  });
-
-  res.status(429).json(message);
-};
-
-// === General limiter ===
+// General rate limiter
 export const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:general:', windowMs: 15 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد درخواست‌ها بیش از حد مجاز است. لطفاً کمی صبر کنید.',
     retryAfter: '15 minutes'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:general:', windowMs: 15 * 60 * 1000 }),
+  onLimitReached: (req, res, options) => {
+    logger.warn('Rate limit exceeded:', {
+      ip: req.ip,
+      url: req.originalUrl,
+      userAgent: req.get('User-Agent')
+    });
+  }
 });
 
-// === Authentication limiter ===
+// Authentication rate limiter
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  skipSuccessfulRequests: true,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:auth:', windowMs: 15 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد تلاش‌های ورود بیش از حد مجاز است. لطفاً 15 دقیقه صبر کنید.',
     retryAfter: '15 minutes'
-  }, { body: { email: '' } })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:auth:', windowMs: 15 * 60 * 1000 }),
+  skipSuccessfulRequests: true
 });
 
-// === Upload limiter ===
+// Upload rate limiter
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:upload:', windowMs: 60 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد آپلود فایل بیش از حد مجاز است. لطفاً یک ساعت صبر کنید.',
     retryAfter: '1 hour'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:upload:', windowMs: 60 * 60 * 1000 })
 });
 
-// === API limiter ===
+// API rate limiter
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:api:', windowMs: 15 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد درخواست‌های API بیش از حد مجاز است.',
     retryAfter: '15 minutes'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:api:', windowMs: 15 * 60 * 1000 })
 });
 
-// === Password reset limiter ===
+// Password reset rate limiter
 export const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:password:', windowMs: 60 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد درخواست‌های بازیابی رمز عبور بیش از حد مجاز است.',
     retryAfter: '1 hour'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:password:', windowMs: 60 * 60 * 1000 })
 });
 
-// === OTP limiter ===
+// OTP rate limiter
 export const otpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:otp:', windowMs: 5 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد درخواست‌های کد تایید بیش از حد مجاز است.',
     retryAfter: '5 minutes'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:otp:', windowMs: 5 * 60 * 1000 })
 });
 
-// === Contact form limiter ===
+// Contact form rate limiter
 export const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:contact:', windowMs: 60 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد ارسال فرم تماس بیش از حد مجاز است.',
     retryAfter: '1 hour'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:contact:', windowMs: 60 * 60 * 1000 })
 });
 
-// === Comment limiter ===
+// Comment rate limiter
 export const commentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: new RedisStore({ prefix: 'rl:comment:', windowMs: 15 * 60 * 1000 }),
-  handler: createHandler({
+  message: {
     success: false,
     message: 'تعداد ثبت نظرات بیش از حد مجاز است.',
     retryAfter: '15 minutes'
-  })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({ prefix: 'rl:comment:', windowMs: 15 * 60 * 1000 })
 });
 
-// === Dynamic limiter ===
+// Create dynamic rate limiter
 export const createRateLimiter = (options = {}) => {
   const defaultOptions = {
     windowMs: 15 * 60 * 1000,
     max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-    store: new RedisStore({ prefix: options.prefix || 'rl:custom:', windowMs: options.windowMs || 15 * 60 * 1000 }),
-    handler: createHandler({
+    message: {
       success: false,
       message: 'تعداد درخواست‌ها بیش از حد مجاز است.',
       retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new RedisStore({ 
+      prefix: options.prefix || 'rl:custom:', 
+      windowMs: options.windowMs || 15 * 60 * 1000 
     })
   };
 
   return rateLimit({ ...defaultOptions, ...options });
 };
 
-// === User-based limiter ===
+// Rate limit by user ID
 export const createUserRateLimiter = (options = {}) => {
   return rateLimit({
     ...options,
-    keyGenerator: (req) => (req.user ? `user:${req.user.id}` : req.ip),
-    store: new RedisStore({ prefix: options.prefix || 'rl:user:', windowMs: options.windowMs || 15 * 60 * 1000 }),
-    handler: createHandler({
-      success: false,
-      message: 'تعداد درخواست‌ها بیش از حد مجاز است.',
-      retryAfter: '15 minutes'
-    })
+    keyGenerator: (req) => {
+      return req.user ? `user:${req.user.id}` : req.ip;
+    }
   });
 };
