@@ -12,8 +12,8 @@ const portfolioSchema = new mongoose.Schema(
       en: { type: String, required: true, trim: true, maxLength: 200 }
     },
     slug: {
-      fa: { type: String, required: true, unique: true, lowercase: true },
-      en: { type: String, required: true, unique: true, lowercase: true }
+        fa: { type: String, required: true, lowercase: true },
+        en: { type: String, required: true, lowercase: true }
     },
     description: {
       fa: { type: String, required: true },

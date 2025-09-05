@@ -1,7 +1,6 @@
 // src/server.js
 import { config } from './config/environment.js';
 import { logger } from './utils/logger.js';
-import { telegramService } from './utils/telegram.js';
 import App from './app.js';
 
 async function startServer() {
@@ -14,11 +13,17 @@ async function startServer() {
       logger.info(`📚 مستندات API: http://localhost:${config.PORT}/api-docs`);
       logger.info(`🌍 محیط: ${config.NODE_ENV}`);
       
-      // Send startup notification
-      telegramService.sendSystemAlert(
-        `🚀 هیکاوب بکند با موفقیت روی پورت ${config.PORT} راه‌اندازی شد`,
-        'info'
-      ).catch(err => logger.warn('Telegram notification failed:', err));
+      // Send startup notification (safely)
+      import('./utils/telegram.js')
+        .then(({ telegramService }) => {
+          if (telegramService && typeof telegramService.sendSystemAlert === 'function') {
+            telegramService.sendSystemAlert(
+              `🚀 هیکاوب بکند با موفقیت روی پورت ${config.PORT} راه‌اندازی شد`,
+              'info'
+            ).catch(err => logger.warn('Telegram notification failed:', err));
+          }
+        })
+        .catch(err => logger.warn('Telegram service not available:', err));
     });
 
     // Graceful shutdown
