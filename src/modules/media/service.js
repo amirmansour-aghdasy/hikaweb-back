@@ -1,10 +1,12 @@
-import multer from 'multer';
 import path from 'path';
+
+import multer from 'multer';
+
 import { Media } from './model.js';
-import { FileProcessor } from '../../utils/fileProcessor.js';
-import { arvanDriveService } from '../../config/arvanDrive.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/environment.js';
+import { FileProcessor } from '../../utils/fileProcessor.js';
+import { arvanDriveService } from '../../config/arvanDrive.js';
 
 export class MediaService {
   static getMulterConfig() {

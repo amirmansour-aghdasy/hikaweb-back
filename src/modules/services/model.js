@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { baseSchemaFields, baseSchemaMethods, baseSchemaStatics } from '../../shared/models/BaseModel.js';
+import { baseSchemaFields, baseSchemaMethods, baseSchemaStatics } from '../../shared/models/baseModel.js';
 
 const serviceSchema = new mongoose.Schema({
   name: {
@@ -7,8 +7,8 @@ const serviceSchema = new mongoose.Schema({
     en: { type: String, required: true, trim: true, maxLength: 200 }
   },
   slug: {
-    fa: { type: String, required: true, unique: true, lowercase: true },
-    en: { type: String, required: true, unique: true, lowercase: true }
+    fa: { type: String, required: true, lowercase: true },
+    en: { type: String, required: true, lowercase: true }
   },
   description: {
     fa: { type: String, required: true },
@@ -88,8 +88,9 @@ const serviceSchema = new mongoose.Schema({
   versionKey: false
 });
 
-serviceSchema.index({ 'slug.fa': 1 });
-serviceSchema.index({ 'slug.en': 1 });
+// Fixed: Combined unique index instead of separate ones
+serviceSchema.index({ 'slug.fa': 1 }, { unique: true, sparse: true });
+serviceSchema.index({ 'slug.en': 1 }, { unique: true, sparse: true });
 serviceSchema.index({ categories: 1 });
 serviceSchema.index({ orderIndex: 1 });
 serviceSchema.index({ 'name.fa': 'text', 'description.fa': 'text' });

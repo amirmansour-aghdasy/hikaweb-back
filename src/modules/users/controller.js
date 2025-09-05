@@ -1,7 +1,6 @@
-import { UserService } from './service.js';
-import { User } from '../auth/model.js';
 import { Role } from './roleModel.js';
-import { logger } from '../../utils/logger.js';
+import { User } from '../auth/model.js';
+import { UserService } from './service.js';
 
 export class UserController {
   /**

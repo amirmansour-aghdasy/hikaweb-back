@@ -1,3 +1,4 @@
+// src/server.js
 import { config } from './config/environment.js';
 import { logger } from './utils/logger.js';
 import { telegramService } from './utils/telegram.js';
@@ -6,7 +7,7 @@ import App from './app.js';
 async function startServer() {
   try {
     const appInstance = new App();
-    const app = appInstance.getApp();
+    const app = appInstance.getExpressApp();
 
     const server = app.listen(config.PORT, () => {
       logger.info(`🚀 هیکاوب بکند سرور روی پورت ${config.PORT} راه‌اندازی شد`);
@@ -17,7 +18,7 @@ async function startServer() {
       telegramService.sendSystemAlert(
         `🚀 هیکاوب بکند با موفقیت روی پورت ${config.PORT} راه‌اندازی شد`,
         'info'
-      );
+      ).catch(err => logger.warn('Telegram notification failed:', err));
     });
 
     // Graceful shutdown
@@ -31,14 +32,7 @@ async function startServer() {
         logger.info('سرور HTTP بسته شد');
         
         try {
-          const { Database } = await import('./config/database.js');
-          const { redisClient } = await import('./config/redis.js');
-          
-          await Database.disconnect();
-          await redisClient.disconnect();
-          
-          logger.info('خاموشی با موفقیت انجام شد');
-          process.exit(0);
+          await appInstance.gracefulShutdown();
         } catch (error) {
           logger.error('خطا در خاموشی:', error);
           process.exit(1);
@@ -57,6 +51,18 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
 
 // Start the server
 startServer();

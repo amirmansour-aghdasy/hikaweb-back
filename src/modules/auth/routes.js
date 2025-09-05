@@ -3,7 +3,7 @@ import { AuthController } from './controller.js';
 import { validate } from '../../middleware/validation.js';
 import { authenticate } from '../../middleware/auth.js';
 import { auditLog } from '../../middleware/audit.js';
-import { authLimiter, otpLimiter } from '../../middleware/rateLimiting.js';
+import { authLimiter, otpLimiter } from '../../middleware/rateLimit.js';
 import { 
   registerSchema, 
   loginSchema, 

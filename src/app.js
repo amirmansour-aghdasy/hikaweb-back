@@ -1,13 +1,20 @@
-import express from 'express';
+// src/app.js - Updated with all module routes
 import cors from 'cors';
+import express from 'express';
 import { config } from './config/environment.js';
 import { Database } from './config/database.js';
 import { redisClient } from './config/redis.js';
 import { logger } from './utils/logger.js';
 import { i18nMiddleware } from './middleware/i18n.js';
-import { securityMiddleware, mongoSanitization } from './middleware/security.js';
-import { generalLimiter } from './middleware/rateLimiting.js';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { securityMiddleware } from './middleware/security.js';
+import { mongoSanitization } from './middleware/validation.js';
+import { generalLimiter } from './middleware/rateLimit.js';
+import {
+  errorHandler,
+  notFoundHandler,
+  developmentErrorHandler,
+  productionErrorHandler
+} from './middleware/errorHandler.js';
 import { pagination } from './middleware/pagination.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
@@ -136,32 +143,48 @@ class App {
     apiRouter.use('/team', teamRoutes);
     apiRouter.use('/faq', faqRoutes);
 
-    // System
+    // System & Support
     apiRouter.use('/tickets', ticketRoutes);
     apiRouter.use('/categories', categoryRoutes);
     apiRouter.use('/brands', brandRoutes);
     apiRouter.use('/consultations', consultationRoutes);
+
+    // Media & Settings
     apiRouter.use('/media', mediaRoutes);
     apiRouter.use('/settings', settingsRoutes);
     apiRouter.use('/carousel', carouselRoutes);
 
-    this.app.use(`/api/${config.API_VERSION}`, apiRouter);
+    // Mount API routes
+    this.app.use('/api/v1', apiRouter);
 
-    // Serve uploaded files (for development)
-    if (config.NODE_ENV === 'development') {
-      this.app.use('/uploads', express.static('uploads'));
-    }
-
-    // Root redirect
-    this.app.get('/', (req, res) => {
+    // API root endpoint
+    this.app.get('/api', (req, res) => {
       res.json({
         success: true,
-        message: 'به API هیکاوب خوش آمدید',
+        message: 'Hikaweb Digital Marketing Agency API',
         version: '1.0.0',
         documentation: '/api-docs',
         endpoints: {
-          health: '/health',
-          api: `/api/${config.API_VERSION}`
+          auth: '/api/v1/auth',
+          users: '/api/v1/users',
+          articles: '/api/v1/articles',
+          services: '/api/v1/services',
+          portfolio: '/api/v1/portfolio',
+          comments: '/api/v1/comments',
+          team: '/api/v1/team',
+          faq: '/api/v1/faq',
+          tickets: '/api/v1/tickets',
+          categories: '/api/v1/categories',
+          brands: '/api/v1/brands',
+          consultations: '/api/v1/consultations',
+          media: '/api/v1/media',
+          settings: '/api/v1/settings',
+          carousel: '/api/v1/carousel'
+        },
+        contact: {
+          website: 'https://hikaweb.ir',
+          email: 'info@hikaweb.ir',
+          support: 'support@hikaweb.ir'
         }
       });
     });
@@ -170,18 +193,74 @@ class App {
   }
 
   initializeErrorHandling() {
-    // 404 handler
-    this.app.use(notFoundHandler);
+    if (process.env.NODE_ENV === 'development') {
+      this.app.use(developmentErrorHandler);
+    }
 
-    // Global error handler
+    // Production middleware
+    if (process.env.NODE_ENV === 'production') {
+      this.app.use(productionErrorHandler);
+    }
+
+    // Main handlers
+    this.app.use(notFoundHandler);
     this.app.use(errorHandler);
 
     logger.info('✅ Error handling initialized');
   }
 
-  getApp() {
+  getExpressApp() {
     return this.app;
   }
+
+  async start() {
+    const port = config.PORT || 3000;
+
+    this.app.listen(port, () => {
+      logger.info(`🚀 Hikaweb API Server running on port ${port}`);
+      logger.info(`📚 API Documentation: http://localhost:${port}/api-docs`);
+      logger.info(`🏥 Health Check: http://localhost:${port}/health`);
+      logger.info(`🌐 Environment: ${config.NODE_ENV}`);
+    });
+  }
+
+  async gracefulShutdown() {
+    logger.info('🔄 Graceful shutdown initiated...');
+
+    try {
+      await Database.disconnect();
+      await redisClient.disconnect();
+      logger.info('✅ Database connections closed');
+
+      process.exit(0);
+    } catch (error) {
+      logger.error('❌ Error during shutdown:', error);
+      process.exit(1);
+    }
+  }
 }
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received');
+  await app.gracefulShutdown();
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received');
+  await app.gracefulShutdown();
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', error => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
 
 export default App;

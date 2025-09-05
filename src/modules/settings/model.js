@@ -3,7 +3,7 @@ import {
   baseSchemaFields,
   baseSchemaMethods,
   baseSchemaStatics
-} from '../../shared/models/BaseModel.js';
+} from '../../shared/models/baseModel.js';
 
 const settingsSchema = new mongoose.Schema(
   {

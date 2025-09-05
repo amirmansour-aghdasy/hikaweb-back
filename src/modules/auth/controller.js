@@ -29,7 +29,6 @@ export class AuthController {
    *                 format: email
    *               mobile:
    *                 type: string
-   *                 pattern: '^(\+98|0)?9\d{9}TP request error:', error);
    *               password:
    *                 type: string
    *                 minLength: 8
@@ -48,9 +47,9 @@ export class AuthController {
   static async register(req, res, next) {
     try {
       const result = await AuthService.register(req.body);
-      
+
       logger.info(`New user registered: ${result.user.email}`);
-      
+
       res.status(201).json({
         success: true,
         message: req.t('auth.registerSuccess'),
@@ -100,9 +99,9 @@ export class AuthController {
     try {
       const { email, password, rememberMe } = req.body;
       const result = await AuthService.login(email, password, rememberMe);
-      
+
       logger.info(`User logged in: ${email}`);
-      
+
       res.json({
         success: true,
         message: req.t('auth.loginSuccess'),
@@ -143,7 +142,7 @@ export class AuthController {
     try {
       const { mobile } = req.body;
       const result = await AuthService.requestOTP(mobile);
-      
+
       res.json({
         success: true,
         message: req.t('auth.otpSent'),
@@ -185,7 +184,7 @@ export class AuthController {
     try {
       const { mobile, otp } = req.body;
       const result = await AuthService.verifyOTP(mobile, otp);
-      
+
       res.json({
         success: true,
         message: req.t('auth.otpVerified'),
@@ -226,7 +225,7 @@ export class AuthController {
     try {
       const { refreshToken } = req.body;
       const result = await AuthService.refreshToken(refreshToken);
-      
+
       res.json({
         success: true,
         message: req.t('auth.tokenRefreshed'),
@@ -264,9 +263,9 @@ export class AuthController {
     try {
       const token = req.headers.authorization?.substring(7);
       const { refreshToken } = req.body;
-      
+
       await AuthService.logout(token, refreshToken, req.user.id);
-      
+
       res.json({
         success: true,
         message: req.t('auth.logoutSuccess')
@@ -292,10 +291,8 @@ export class AuthController {
    */
   static async me(req, res, next) {
     try {
-      const user = await User.findById(req.user.id)
-        .populate('role')
-        .select('-refreshTokens');
-      
+      const user = await User.findById(req.user.id).populate('role').select('-refreshTokens');
+
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -344,9 +341,9 @@ export class AuthController {
   static async changePassword(req, res, next) {
     try {
       const { currentPassword, newPassword } = req.body;
-      
+
       await AuthService.changePassword(req.user.id, currentPassword, newPassword);
-      
+
       res.json({
         success: true,
         message: req.t('auth.passwordChanged')

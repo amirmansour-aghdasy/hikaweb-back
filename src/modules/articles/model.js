@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { baseSchemaFields, baseSchemaMethods, baseSchemaStatics } from '../../shared/models/BaseModel.js';
+import { baseSchemaFields, baseSchemaMethods, baseSchemaStatics } from '../../shared/models/baseModel.js';
 
 const articleSchema = new mongoose.Schema({
   title: {
@@ -7,8 +7,8 @@ const articleSchema = new mongoose.Schema({
     en: { type: String, required: true, trim: true, maxLength: 200 }
   },
   slug: {
-    fa: { type: String, required: true, unique: true, lowercase: true },
-    en: { type: String, required: true, unique: true, lowercase: true }
+    fa: { type: String, required: true, lowercase: true },
+    en: { type: String, required: true, lowercase: true }
   },
   excerpt: {
     fa: { type: String, maxLength: 500 },
@@ -55,8 +55,8 @@ const articleSchema = new mongoose.Schema({
   versionKey: false
 });
 
-articleSchema.index({ 'slug.fa': 1 });
-articleSchema.index({ 'slug.en': 1 });
+articleSchema.index({ 'slug.fa': 1 }, { unique: true, sparse: true });
+articleSchema.index({ 'slug.en': 1 }, { unique: true, sparse: true });
 articleSchema.index({ author: 1 });
 articleSchema.index({ categories: 1 });
 articleSchema.index({ isPublished: 1 });
