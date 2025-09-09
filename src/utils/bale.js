@@ -1,30 +1,30 @@
 import { config } from '../config/environment.js';
 import { logger } from './logger.js';
 
-class TelegramService {
+class BaleService {
   constructor() {
-    this.botToken = config.TELEGRAM_BOT_TOKEN;
-    this.adminChatIds = config.TELEGRAM_ADMIN_CHAT_IDS?.split(',') || [];
+    this.botToken = config.BALE_BOT_TOKEN;
+    this.adminChatIds = config.BALE_ADMIN_CHAT_IDS?.split(',') || [];
     this.isEnabled = !!this.botToken;
-    
+
     if (!this.isEnabled) {
-      logger.warn('Telegram bot token not configured');
+      logger.warn('Bale bot token not configured');
     }
   }
 
   async sendMessage(chatId, message, options = {}) {
     if (!this.isEnabled) {
-      logger.warn('Telegram service disabled - no bot token');
+      logger.warn('Bale service disabled - no bot token');
       return false;
     }
 
     try {
-      const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
-      
+      const url = `https://tapi.bale.ai/bot${this.botToken}/sendMessage`;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           chat_id: chatId,
@@ -35,37 +35,37 @@ class TelegramService {
       });
 
       const result = await response.json();
-      
+
       if (!result.ok) {
-        logger.error('Telegram API error:', result);
+        logger.error('Bale API error:', result);
         return false;
       }
 
       return true;
     } catch (error) {
-      logger.error('Telegram send error:', error);
+      logger.error('Bale send error:', error);
       return false;
     }
   }
 
   async sendToAdmins(message, options = {}) {
     if (!this.isEnabled || this.adminChatIds.length === 0) {
-      logger.warn('Telegram admins not configured');
+      logger.warn('Bale admins not configured');
       return false;
     }
 
-    const promises = this.adminChatIds.map(chatId => 
+    const promises = this.adminChatIds.map(chatId =>
       this.sendMessage(chatId.trim(), message, options)
     );
 
     try {
       const results = await Promise.allSettled(promises);
       const successful = results.filter(r => r.status === 'fulfilled' && r.value).length;
-      
-      logger.info(`Telegram message sent to ${successful}/${this.adminChatIds.length} admins`);
+
+      logger.info(`Bale message sent to ${successful}/${this.adminChatIds.length} admins`);
       return successful > 0;
     } catch (error) {
-      logger.error('Telegram broadcast error:', error);
+      logger.error('Bale broadcast error:', error);
       return false;
     }
   }
@@ -111,7 +111,6 @@ ${errorData.stack ? `<b>Stack:</b>\n<code>${errorData.stack.substring(0, 500)}..
   }
 
   async sendUserNotification(userId, message) {
-    // Implementation for sending to specific user
     return await this.sendMessage(userId, message);
   }
 
@@ -135,4 +134,4 @@ ${errorData.stack ? `<b>Stack:</b>\n<code>${errorData.stack.substring(0, 500)}..
 }
 
 // Export singleton instance
-export const telegramService = new TelegramService();
+export const baleService = new BaleService();

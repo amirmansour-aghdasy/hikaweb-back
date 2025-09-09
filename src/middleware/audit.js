@@ -1,5 +1,5 @@
 import { auditLogger } from '../utils/logger.js';
-import { telegramService } from '../utils/telegram.js';
+import { baleService } from '../utils/bale.js';
 
 export const auditLog = (action, resource) => {
   return async (req, res, next) => {
@@ -22,7 +22,7 @@ export const auditLog = (action, resource) => {
       // Notify critical actions
       const criticalActions = ['DELETE', 'CREATE_USER', 'UPDATE_ROLE'];
       if (criticalActions.includes(action)) {
-        telegramService.sendAuditNotification(auditData);
+        baleService.sendAuditNotification(auditData);
       }
 
       originalSend.call(this, data);

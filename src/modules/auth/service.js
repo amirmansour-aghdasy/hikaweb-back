@@ -12,10 +12,7 @@ export class AuthService {
     try {
       // Check if user exists
       const existingUser = await User.findOne({
-        $or: [
-          { email: userData.email },
-          ...(userData.mobile ? [{ mobile: userData.mobile }] : [])
-        ]
+        $or: [{ email: userData.email }, ...(userData.mobile ? [{ mobile: userData.mobile }] : [])]
       });
 
       if (existingUser) {
@@ -55,10 +52,12 @@ export class AuthService {
 
   static async login(email, password, rememberMe = false) {
     try {
-      const user = await User.findOne({ 
+      const user = await User.findOne({
         email,
-        deletedAt: null 
-      }).select('+password').populate('role');
+        deletedAt: null
+      })
+        .select('+password')
+        .populate('role');
 
       if (!user) {
         throw new Error('اطلاعات ورود نادرست است');
@@ -69,7 +68,7 @@ export class AuthService {
       }
 
       const isPasswordValid = await user.matchPassword(password);
-      
+
       if (!isPasswordValid) {
         await user.incrementLoginAttempts();
         throw new Error('اطلاعات ورود نادرست است');
@@ -115,17 +114,21 @@ export class AuthService {
 
       // Store in Redis
       const redis = redisClient.getClient();
-      await redis.setEx(`otp:${mobile}`, 300, JSON.stringify({
-        otp,
-        expiresAt,
-        attempts: 0
-      }));
+      await redis.setEx(
+        `otp:${mobile}`,
+        300,
+        JSON.stringify({
+          otp,
+          expiresAt,
+          attempts: 0
+        })
+      );
 
       // Send SMS
       await smsService.sendOTP(mobile, otp);
 
       logger.info(`OTP sent to ${mobile}`);
-      
+
       return {
         message: 'کد تایید ارسال شد',
         expiresIn: 300
@@ -158,11 +161,15 @@ export class AuthService {
       }
 
       if (otp !== storedOTP) {
-        await redis.setEx(`otp:${mobile}`, 300, JSON.stringify({
-          otp: storedOTP,
-          expiresAt,
-          attempts: attempts + 1
-        }));
+        await redis.setEx(
+          `otp:${mobile}`,
+          300,
+          JSON.stringify({
+            otp: storedOTP,
+            expiresAt,
+            attempts: attempts + 1
+          })
+        );
         throw new Error('کد تایید نادرست است');
       }
 
@@ -171,7 +178,7 @@ export class AuthService {
 
       // Find or create user
       let user = await User.findOne({ mobile }).populate('role');
-      
+
       if (!user) {
         const defaultRole = await Role.findOne({ name: 'user' });
         user = new User({
@@ -200,10 +207,8 @@ export class AuthService {
   static async refreshToken(refreshToken) {
     try {
       const decoded = jwt.verify(refreshToken, config.JWT_REFRESH_SECRET);
-      
-      const user = await User.findById(decoded.id)
-        .populate('role')
-        .select('+refreshTokens');
+
+      const user = await User.findById(decoded.id).populate('role').select('+refreshTokens');
 
       if (!user) {
         throw new Error('کاربر یافت نشد');
@@ -241,11 +246,11 @@ export class AuthService {
   static async logout(token, refreshToken, userId) {
     try {
       const redis = redisClient.getClient();
-      
+
       // Blacklist access token
       const decoded = jwt.decode(token);
       const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
-      
+
       if (expiresIn > 0) {
         await redis.setEx(`blacklist:${token}`, expiresIn, 'true');
       }
@@ -278,15 +283,11 @@ export class AuthService {
       audience: 'hikaweb-clients'
     });
 
-    const refreshToken = jwt.sign(
-      { id: user._id },
-      config.JWT_REFRESH_SECRET,
-      {
-        expiresIn: config.JWT_REFRESH_EXPIRES_IN,
-        issuer: 'hikaweb',
-        audience: 'hikaweb-clients'
-      }
-    );
+    const refreshToken = jwt.sign({ id: user._id }, config.JWT_REFRESH_SECRET, {
+      expiresIn: config.JWT_REFRESH_EXPIRES_IN,
+      issuer: 'hikaweb',
+      audience: 'hikaweb-clients'
+    });
 
     return { accessToken, refreshToken, expiresIn };
   }
@@ -294,13 +295,13 @@ export class AuthService {
   static async changePassword(userId, currentPassword, newPassword) {
     try {
       const user = await User.findById(userId).select('+password');
-      
+
       if (!user) {
         throw new Error('کاربر یافت نشد');
       }
 
       const isCurrentPasswordValid = await user.matchPassword(currentPassword);
-      
+
       if (!isCurrentPasswordValid) {
         throw new Error('رمز عبور فعلی نادرست است');
       }

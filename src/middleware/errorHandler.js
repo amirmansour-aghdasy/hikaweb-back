@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
-import { telegramService } from '../utils/telegram.js';
+import { baleService } from '../utils/bale.js';
 import { AppError } from '../utils/appError.js';
-import { getErrorMessage } from "../utils/errorMessages.js";
+import { getErrorMessage } from '../utils/errorMessages.js';
 import { HTTP_STATUS } from '../utils/httpStatus.js';
 
 /**
@@ -11,7 +11,7 @@ import { HTTP_STATUS } from '../utils/httpStatus.js';
 export const errorHandler = (err, req, res, next) => {
   // Get user language preference
   const language = req.language || req.headers['accept-language'] || 'fa';
-
+  
   // Log error details
   logger.error('Error occurred:', {
     error: err.message,
@@ -36,7 +36,7 @@ export const errorHandler = (err, req, res, next) => {
     // Mongoose validation error
     const message = getErrorMessage('validationError', language);
     error = new AppError(message, HTTP_STATUS.BAD_REQUEST);
-
+    
     // Add validation details
     if (err.errors) {
       error.details = Object.keys(err.errors).map(key => ({
@@ -86,20 +86,18 @@ export const errorHandler = (err, req, res, next) => {
     error = new AppError(message, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 
-  // Send critical errors to Telegram (500+ status codes)
+  // Send critical errors to Bale (تغییر از telegram به bale)
   if (error.statusCode >= 500) {
-    telegramService
-      .sendErrorNotification({
-        error: error.message,
-        url: req.originalUrl,
-        method: req.method,
-        user: req.user?.email || 'Anonymous',
-        timestamp: new Date().toISOString(),
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-      })
-      .catch(telegramErr => {
-        logger.error('Failed to send Telegram notification:', telegramErr);
-      });
+    baleService.sendErrorNotification({
+      error: error.message,
+      url: req.originalUrl,
+      method: req.method,
+      user: req.user?.email || 'Anonymous',
+      timestamp: new Date().toISOString(),
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    }).catch(baleErr => {
+      logger.error('Failed to send Bale notification:', baleErr.message);
+    });
   }
 
   // Prepare response
@@ -124,7 +122,7 @@ export const errorHandler = (err, req, res, next) => {
 export const notFoundHandler = (req, res) => {
   const language = req.language || req.headers['accept-language'] || 'fa';
   const message = getErrorMessage('routeNotFound', language);
-
+  
   logger.warn('Route not found:', {
     url: req.originalUrl,
     method: req.method,
@@ -145,7 +143,7 @@ export const notFoundHandler = (req, res) => {
  * Async Error Handler
  * Wrapper for async route handlers to catch promise rejections
  */
-export const asyncErrorHandler = fn => {
+export const asyncErrorHandler = (fn) => {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
@@ -172,7 +170,7 @@ export const validationErrorHandler = (err, req, res, next) => {
 
     return next(error);
   }
-
+  
   next(err);
 };
 
@@ -183,7 +181,7 @@ export const validationErrorHandler = (err, req, res, next) => {
 export const rateLimitErrorHandler = (req, res) => {
   const language = req.language || 'fa';
   const message = getErrorMessage('tooManyRequests', language);
-
+  
   logger.warn('Rate limit exceeded:', {
     ip: req.ip,
     url: req.originalUrl,

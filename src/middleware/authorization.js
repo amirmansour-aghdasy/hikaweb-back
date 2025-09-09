@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger.js';
 
-export const authorize = (permissions) => {
+export const authorize = permissions => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -17,7 +17,7 @@ export const authorize = (permissions) => {
       return next();
     }
 
-    const hasPermission = requiredPermissions.some(permission => 
+    const hasPermission = requiredPermissions.some(permission =>
       userPermissions.includes(permission)
     );
 

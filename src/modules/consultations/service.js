@@ -2,7 +2,7 @@ import { Consultation } from './model.js';
 import { Service } from '../services/model.js';
 import { User } from '../auth/model.js';
 import { smsService } from '../../utils/sms.js';
-import { telegramService } from '../../utils/telegram.js';
+import { baleService } from '../../utils/bale.js';
 import { logger } from '../../utils/logger.js';
 
 export class ConsultationService {
@@ -166,7 +166,7 @@ export class ConsultationService {
 زمان‌بندی: ${consultation.timeline}`;
 
       // Send Telegram notification
-      await telegramService.sendSystemAlert(message, 'info');
+      await baleService.sendSystemAlert(message, 'info');
 
       // Send SMS to admin numbers
       const adminUsers = await User.find({

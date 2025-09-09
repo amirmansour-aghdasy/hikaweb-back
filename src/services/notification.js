@@ -1,16 +1,9 @@
-import { telegramService } from '../utils/telegram.js';
+import { baleService } from '../utils/bale.js';
 import { smsService } from '../utils/sms.js';
 import { logger } from '../utils/logger.js';
 import { User } from '../modules/auth/model.js';
 
-/**
- * Notification Service
- * Handles all types of notifications (Telegram, SMS, Email)
- */
 export class NotificationService {
-  /**
-   * Send notification to user
-   */
   static async notifyUser(userId, type, data) {
     try {
       const user = await User.findById(userId);
@@ -19,11 +12,6 @@ export class NotificationService {
       }
 
       const notifications = [];
-
-      // Send based on user preferences
-      if (user.preferences?.notifications?.email !== false) {
-        notifications.push(this.sendEmailNotification(user.email, type, data));
-      }
 
       if (user.preferences?.notifications?.sms !== false && user.phone) {
         notifications.push(this.sendSMSNotification(user.phone, type, data));
@@ -39,13 +27,10 @@ export class NotificationService {
     }
   }
 
-  /**
-   * Send notification to moderators/admins
-   */
   static async notifyModerators(type, data) {
     try {
-      // Send to Telegram
-      await telegramService.sendToAdmins(`
+      // Send to Bale instead of Telegram
+      await baleService.sendToAdmins(`
 🔔 **${this.getNotificationTitle(type)}**
 
 ${this.formatNotificationData(type, data)}
@@ -61,9 +46,6 @@ ${this.formatNotificationData(type, data)}
     }
   }
 
-  /**
-   * Send SMS notification
-   */
   static async sendSMSNotification(phone, type, data) {
     try {
       const message = this.getSMSMessage(type, data);
@@ -77,9 +59,6 @@ ${this.formatNotificationData(type, data)}
     }
   }
 
-  /**
-   * Get notification title based on type
-   */
   static getNotificationTitle(type) {
     const titles = {
       comment_created: 'نظر جدید ثبت شد',
@@ -95,9 +74,6 @@ ${this.formatNotificationData(type, data)}
     return titles[type] || 'اعلان سیستم';
   }
 
-  /**
-   * Format notification data
-   */
   static formatNotificationData(type, data) {
     switch (type) {
       case 'comment_created':
@@ -117,9 +93,6 @@ ${this.formatNotificationData(type, data)}
     }
   }
 
-  /**
-   * Get SMS message content
-   */
   static getSMSMessage(type, data) {
     const messages = {
       comment_moderated: `نظر شما ${data.status === 'approved' ? 'تایید' : 'رد'} شد.`,
@@ -132,9 +105,6 @@ ${this.formatNotificationData(type, data)}
     return messages[type] || 'اعلان از هیکاوب';
   }
 
-  /**
-   * Get email content
-   */
   static getEmailContent(type, data) {
     const contents = {
       comment_moderated: {
@@ -159,9 +129,6 @@ ${this.formatNotificationData(type, data)}
     );
   }
 
-  /**
-   * Send bulk notifications
-   */
   static async sendBulkNotification(userIds, type, data) {
     try {
       const notifications = userIds.map(userId => this.notifyUser(userId, type, data));
@@ -177,5 +144,4 @@ ${this.formatNotificationData(type, data)}
   }
 }
 
-// Export instance for convenience
 export const notificationService = NotificationService;

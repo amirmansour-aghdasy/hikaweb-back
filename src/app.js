@@ -1,23 +1,22 @@
-// src/app.js - Updated with all module routes
 import cors from 'cors';
 import express from 'express';
-import { config } from './config/environment.js';
+import {
+    errorHandler,
+    notFoundHandler,
+    developmentErrorHandler,
+    productionErrorHandler
+  } from './middleware/errorHandler.js';  
+import swaggerUi from 'swagger-ui-express';
+import { logger } from './utils/logger.js';
 import { Database } from './config/database.js';
 import { redisClient } from './config/redis.js';
-import { logger } from './utils/logger.js';
+import { config } from './config/environment.js';
+import { swaggerSpec } from './config/swagger.js';
 import { i18nMiddleware } from './middleware/i18n.js';
+import { pagination } from './middleware/pagination.js';
+import { generalLimiter } from './middleware/rateLimit.js';
 import { securityMiddleware } from './middleware/security.js';
 import { mongoSanitization } from './middleware/validation.js';
-import { generalLimiter } from './middleware/rateLimit.js';
-import {
-  errorHandler,
-  notFoundHandler,
-  developmentErrorHandler,
-  productionErrorHandler
-} from './middleware/errorHandler.js';
-import { pagination } from './middleware/pagination.js';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
 
 // Import all module routes
 import authRoutes from './modules/auth/routes.js';

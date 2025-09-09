@@ -1,7 +1,7 @@
 import { Ticket } from './model.js';
 import { User } from '../auth/model.js';
 import { smsService } from '../../utils/sms.js';
-import { telegramService } from '../../utils/telegram.js';
+import { baleService } from '../../utils/bale.js';
 import { logger } from '../../utils/logger.js';
 
 export class TicketService {
@@ -278,7 +278,7 @@ export class TicketService {
 اولویت: ${ticket.priority}`;
 
       // Send Telegram notification
-      await telegramService.sendSystemAlert(message, 'info');
+      await baleService.sendSystemAlert(message, 'info');
 
       // Send SMS to admin numbers (if configured)
       const adminMobiles = adminUsers.filter(user => user.mobile).map(user => user.mobile);
@@ -299,7 +299,7 @@ export class TicketService {
 ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
 محتوا: ${message.content.substring(0, 100)}...`;
 
-      await telegramService.sendSystemAlert(notification, 'info');
+      await baleService.sendSystemAlert(notification, 'info');
 
       // SMS notification to customer or assigned user
       let targetMobile = null;
@@ -332,7 +332,7 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
 واگذار شده به: ${ticket.assignedTo.name}
 موضوع: ${ticket.subject}`;
 
-      await telegramService.sendSystemAlert(telegramMessage, 'info');
+      await baleService.sendSystemAlert(telegramMessage, 'info');
     } catch (error) {
       logger.error('Assignment notification error:', error);
     }
@@ -351,7 +351,7 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
 مشتری: ${ticket.customer.name}
 زمان حل: ${ticket.resolution.resolutionTime} دقیقه`;
 
-      await telegramService.sendSystemAlert(telegramMessage, 'info');
+      await baleService.sendSystemAlert(telegramMessage, 'info');
     } catch (error) {
       logger.error('Resolution notification error:', error);
     }
