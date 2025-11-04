@@ -281,11 +281,11 @@ export class TicketService {
       await baleService.sendSystemAlert(message, 'info');
 
       // Send SMS to admin numbers (if configured)
-      const adminMobiles = adminUsers.filter(user => user.mobile).map(user => user.mobile);
+      const adminPhoneNumbers = adminUsers.filter(user => user.phoneNumber).map(user => user.phoneNumber);
 
-      if (adminMobiles.length > 0) {
+      if (adminPhoneNumbers.length > 0) {
         const smsMessage = `تیکت جدید ${ticket.ticketNumber} از ${ticket.customer.name}`;
-        await smsService.sendBulk(adminMobiles, smsMessage);
+        await smsService.sendBulk(adminPhoneNumbers, smsMessage);
       }
     } catch (error) {
       logger.error('New ticket notification error:', error);
@@ -302,17 +302,17 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
       await baleService.sendSystemAlert(notification, 'info');
 
       // SMS notification to customer or assigned user
-      let targetMobile = null;
+      let targetPhoneNumber = null;
 
-      if (isCustomer && ticket.assignedTo?.mobile) {
-        targetMobile = ticket.assignedTo.mobile;
-      } else if (!isCustomer && ticket.customer.mobile) {
-        targetMobile = ticket.customer.mobile;
+      if (isCustomer && ticket.assignedTo?.phoneNumber) {
+        targetPhoneNumber = ticket.assignedTo.phoneNumber;
+      } else if (!isCustomer && ticket.customer.phoneNumber) {
+        targetPhoneNumber = ticket.customer.phoneNumber;
       }
 
-      if (targetMobile) {
+      if (targetPhoneNumber) {
         const smsMessage = `پیام جدید در تیکت ${ticket.ticketNumber}. لطفاً وارد پنل شوید.`;
-        await smsService.sendNotification(targetMobile, smsMessage);
+        await smsService.sendNotification(targetPhoneNumber, smsMessage);
       }
     } catch (error) {
       logger.error('Message notification error:', error);
@@ -321,9 +321,9 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
 
   static async notifyTicketAssignment(ticket) {
     try {
-      if (ticket.assignedTo?.mobile) {
+      if (ticket.assignedTo?.phoneNumber) {
         const message = `تیکت ${ticket.ticketNumber} به شما واگذار شد. موضوع: ${ticket.subject}`;
-        await smsService.sendNotification(ticket.assignedTo.mobile, message);
+        await smsService.sendNotification(ticket.assignedTo.phoneNumber, message);
       }
 
       const telegramMessage = `📋 تیکت واگذار شد
@@ -340,9 +340,9 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
 
   static async notifyTicketResolution(ticket) {
     try {
-      if (ticket.customer.mobile) {
+      if (ticket.customer.phoneNumber) {
         const message = `تیکت ${ticket.ticketNumber} حل شد. از همکاری شما متشکریم.`;
-        await smsService.sendNotification(ticket.customer.mobile, message);
+        await smsService.sendNotification(ticket.customer.phoneNumber, message);
       }
 
       const telegramMessage = `✅ تیکت حل شد
@@ -354,6 +354,35 @@ ${isCustomer ? 'از طرف مشتری' : 'از طرف پشتیبانی'}
       await baleService.sendSystemAlert(telegramMessage, 'info');
     } catch (error) {
       logger.error('Resolution notification error:', error);
+    }
+  }
+
+  static async deleteTicket(ticketId, userId) {
+    try {
+      const ticket = await Ticket.findById(ticketId);
+
+      if (!ticket) {
+        throw new Error('تیکت یافت نشد');
+      }
+
+      // Check permissions
+      const user = await User.findById(userId).populate('role');
+      const hasAdminAccess =
+        user.role.permissions.includes('tickets.delete') ||
+        user.role.permissions.includes('admin.all');
+
+      if (!hasAdminAccess) {
+        throw new Error('شما مجاز به حذف تیکت نیستید');
+      }
+
+      // Soft delete
+      await ticket.softDelete(userId);
+
+      logger.info(`Ticket deleted: ${ticket.ticketNumber} by user ${userId}`);
+      return true;
+    } catch (error) {
+      logger.error('Ticket deletion error:', error);
+      throw error;
     }
   }
 }

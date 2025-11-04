@@ -102,6 +102,26 @@ export class CarouselController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/carousel/{id}:
+   *   get:
+   *     summary: دریافت جزئیات اسلاید
+   *     tags: [Carousel]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات اسلاید دریافت شد
+   *       404:
+   *         description: اسلاید یافت نشد
+   */
   static async getCarouselById(req, res, next) {
     try {
       const carousel = await Carousel.findById(req.params.id);
@@ -122,6 +142,53 @@ export class CarouselController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/carousel/{id}:
+   *   put:
+   *     summary: ویرایش اسلاید
+   *     tags: [Carousel]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               title:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               subtitle:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               description:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               image:
+   *                 type: string
+   *               link:
+   *                 type: string
+   *               position:
+   *                 type: string
+   *                 enum: [home, services, portfolio, about]
+   *               isVisible:
+   *                 type: boolean
+   *               orderIndex:
+   *                 type: number
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: اسلاید با موفقیت ویرایش شد
+   *       404:
+   *         description: اسلاید یافت نشد
+   */
   static async updateCarousel(req, res, next) {
     try {
       const carousel = await CarouselService.updateCarousel(req.params.id, req.body, req.user.id);
@@ -136,6 +203,26 @@ export class CarouselController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/carousel/{id}:
+   *   delete:
+   *     summary: حذف اسلاید
+   *     tags: [Carousel]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: اسلاید با موفقیت حذف شد
+   *       404:
+   *         description: اسلاید یافت نشد
+   */
   static async deleteCarousel(req, res, next) {
     try {
       await CarouselService.deleteCarousel(req.params.id, req.user.id);

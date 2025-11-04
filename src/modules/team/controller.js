@@ -132,6 +132,26 @@ export class TeamController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/team/{id}:
+   *   get:
+   *     summary: دریافت جزئیات عضو تیم
+   *     tags: [Team]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات عضو تیم دریافت شد
+   *       404:
+   *         description: عضو تیم یافت نشد
+   */
   static async getTeamMemberById(req, res, next) {
     try {
       const teamMember = await TeamMember.findById(req.params.id);
@@ -183,6 +203,48 @@ export class TeamController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/team/{id}:
+   *   put:
+   *     summary: ویرایش عضو تیم
+   *     tags: [Team]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               position:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               bio:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               avatar:
+   *                 type: string
+   *               email:
+   *                 type: string
+   *               phone:
+   *                 type: string
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: عضو تیم با موفقیت ویرایش شد
+   *       404:
+   *         description: عضو تیم یافت نشد
+   */
   static async updateTeamMember(req, res, next) {
     try {
       const teamMember = await TeamService.updateTeamMember(req.params.id, req.body, req.user.id);
@@ -197,6 +259,26 @@ export class TeamController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/team/{id}:
+   *   delete:
+   *     summary: حذف عضو تیم
+   *     tags: [Team]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: عضو تیم با موفقیت حذف شد
+   *       404:
+   *         description: عضو تیم یافت نشد
+   */
   static async deleteTeamMember(req, res, next) {
     try {
       await TeamService.deleteTeamMember(req.params.id, req.user.id);

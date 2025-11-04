@@ -27,7 +27,7 @@ export class UserController {
    *               email:
    *                 type: string
    *                 format: email
-   *               mobile:
+   *               phoneNumber:
    *                 type: string
    *               password:
    *                 type: string
@@ -104,6 +104,26 @@ export class UserController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/users/{id}:
+   *   get:
+   *     summary: دریافت جزئیات کاربر
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات کاربر دریافت شد
+   *       404:
+   *         description: کاربر یافت نشد
+   */
   static async getUserById(req, res, next) {
     try {
       const user = await User.findById(req.params.id).populate(
@@ -127,6 +147,48 @@ export class UserController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/users/{id}:
+   *   put:
+   *     summary: ویرایش کاربر
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 type: string
+   *               email:
+   *                 type: string
+   *                 format: email
+   *               phoneNumber:
+   *                 type: string
+   *               role:
+   *                 type: string
+   *               language:
+   *                 type: string
+   *                 enum: [fa, en]
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: کاربر با موفقیت ویرایش شد
+   *       404:
+   *         description: کاربر یافت نشد
+   */
   static async updateUser(req, res, next) {
     try {
       const user = await UserService.updateUser(req.params.id, req.body, req.user.id);
@@ -141,6 +203,26 @@ export class UserController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/users/{id}:
+   *   delete:
+   *     summary: حذف کاربر
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: کاربر با موفقیت حذف شد
+   *       404:
+   *         description: کاربر یافت نشد
+   */
   static async deleteUser(req, res, next) {
     try {
       await UserService.deleteUser(req.params.id, req.user.id);
@@ -154,6 +236,18 @@ export class UserController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/users/roles:
+   *   get:
+   *     summary: دریافت لیست نقش‌ها
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: لیست نقش‌ها دریافت شد
+   */
   static async getRoles(req, res, next) {
     try {
       const roles = await Role.find({ deletedAt: null }).sort({ priority: -1 });

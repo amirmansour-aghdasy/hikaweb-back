@@ -9,15 +9,15 @@ class SMSService {
     this.sender = config.KAVENEGAR_SENDER;
   }
 
-  async sendOTP(mobile, otp) {
+  async sendOTP(phoneNumber, otp) {
     try {
       const url = `${this.baseURL}/${this.apiKey}/verify/lookup.json`;
       const response = await axios.post(url, {
-        receptor: mobile,
+        receptor: phoneNumber,
         token: otp,
         template: 'verify'
       });
-      logger.info(`OTP sent to ${mobile}`);
+      logger.info(`OTP sent to ${phoneNumber}`);
       return response.data;
     } catch (error) {
       logger.error('SMS sending failed:', error);
@@ -25,11 +25,11 @@ class SMSService {
     }
   }
 
-  async sendNotification(mobile, message) {
+  async sendNotification(phoneNumber, message) {
     try {
       const url = `${this.baseURL}/${this.apiKey}/sms/send.json`;
       const response = await axios.post(url, {
-        receptor: mobile,
+        receptor: phoneNumber,
         sender: this.sender,
         message: message
       });

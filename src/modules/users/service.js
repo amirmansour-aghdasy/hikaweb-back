@@ -7,7 +7,7 @@ export class UserService {
     try {
       // Check if user already exists
       const existingUser = await User.findOne({
-        $or: [{ email: userData.email }, ...(userData.mobile ? [{ mobile: userData.mobile }] : [])],
+        $or: [{ email: userData.email }, ...(userData.phoneNumber ? [{ phoneNumber: userData.phoneNumber }] : [])],
         deletedAt: null
       });
 
@@ -47,13 +47,13 @@ export class UserService {
         throw new Error('کاربر یافت نشد');
       }
 
-      // Check email/mobile uniqueness if changed
-      if (updateData.email || updateData.mobile) {
+      // Check email/phoneNumber uniqueness if changed
+      if (updateData.email || updateData.phoneNumber) {
         const existingUser = await User.findOne({
           _id: { $ne: userId },
           $or: [
             ...(updateData.email ? [{ email: updateData.email }] : []),
-            ...(updateData.mobile ? [{ mobile: updateData.mobile }] : [])
+            ...(updateData.phoneNumber ? [{ phoneNumber: updateData.phoneNumber }] : [])
           ],
           deletedAt: null
         });
@@ -129,11 +129,17 @@ export class UserService {
         query.$or = [
           { name: new RegExp(search, 'i') },
           { email: new RegExp(search, 'i') },
-          { mobile: new RegExp(search, 'i') }
+          { phoneNumber: new RegExp(search, 'i') }
         ];
       }
 
-      if (role) query.role = role;
+      if (role) {
+        // Support multiple roles separated by comma (e.g., "admin,consultant")
+        const roles = role.split(',').map(r => r.trim()).filter(r => r);
+        if (roles.length > 0) {
+          query.role = roles.length === 1 ? roles[0] : { $in: roles };
+        }
+      }
       if (status) query.status = status;
 
       const sortOptions = {};

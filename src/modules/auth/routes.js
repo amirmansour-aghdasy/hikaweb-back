@@ -10,7 +10,8 @@ import {
   otpRequestSchema, 
   otpVerifySchema,
   refreshTokenSchema,
-  changePasswordSchema 
+  changePasswordSchema,
+  googleAuthSchema
 } from './validation.js';
 
 const router = Router();
@@ -49,8 +50,19 @@ router.post('/refresh',
   AuthController.refreshToken
 );
 
+router.post('/google',
+  authLimiter,
+  validate(googleAuthSchema),
+  auditLog('GOOGLE_AUTH', 'users'),
+  AuthController.googleAuth
+);
+
 // Protected routes
 router.use(authenticate);
+
+router.get('/csrf-token',
+  AuthController.getCsrfToken
+);
 
 router.post('/logout',
   auditLog('LOGOUT', 'users'),

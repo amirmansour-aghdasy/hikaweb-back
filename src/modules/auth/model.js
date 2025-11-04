@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true
     },
-    mobile: {
+    phoneNumber: {
       type: String,
       unique: true,
       sparse: true,
@@ -47,7 +47,7 @@ const userSchema = new mongoose.Schema(
       required: true
     },
     isEmailVerified: { type: Boolean, default: false },
-    isMobileVerified: { type: Boolean, default: false },
+    isPhoneNumberVerified: { type: Boolean, default: false },
     lastLogin: Date,
     loginAttempts: { type: Number, default: 0 },
     lockUntil: Date,

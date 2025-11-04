@@ -22,7 +22,7 @@ const consultationSchema = new mongoose.Schema(
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'ایمیل معتبر وارد کنید']
     },
 
-    mobile: {
+    phoneNumber: {
       type: String,
       required: [true, 'شماره موبایل الزامی است'],
       match: [/^(\+98|0)?9\d{9}$/, 'شماره موبایل معتبر وارد کنید']
@@ -165,7 +165,7 @@ const consultationSchema = new mongoose.Schema(
 );
 
 consultationSchema.index({ email: 1 });
-consultationSchema.index({ mobile: 1 });
+consultationSchema.index({ phoneNumber: 1 });
 consultationSchema.index({ requestStatus: 1 });
 consultationSchema.index({ assignedTo: 1 });
 consultationSchema.index({ services: 1 });

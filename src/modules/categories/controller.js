@@ -113,6 +113,26 @@ export class CategoryController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/categories/{id}:
+   *   get:
+   *     summary: دریافت جزئیات دسته‌بندی
+   *     tags: [Categories]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات دسته‌بندی دریافت شد
+   *       404:
+   *         description: دسته‌بندی یافت نشد
+   */
   static async getCategoryById(req, res, next) {
     try {
       const category = await Category.findById(req.params.id)
@@ -135,6 +155,46 @@ export class CategoryController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/categories/{id}:
+   *   put:
+   *     summary: ویرایش دسته‌بندی
+   *     tags: [Categories]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               slug:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               description:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               parent:
+   *                 type: string
+   *               orderIndex:
+   *                 type: number
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: دسته‌بندی با موفقیت ویرایش شد
+   *       404:
+   *         description: دسته‌بندی یافت نشد
+   */
   static async updateCategory(req, res, next) {
     try {
       const category = await CategoryService.updateCategory(req.params.id, req.body, req.user.id);
@@ -149,6 +209,26 @@ export class CategoryController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/categories/{id}:
+   *   delete:
+   *     summary: حذف دسته‌بندی
+   *     tags: [Categories]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: دسته‌بندی با موفقیت حذف شد
+   *       404:
+   *         description: دسته‌بندی یافت نشد
+   */
   static async deleteCategory(req, res, next) {
     try {
       await CategoryService.deleteCategory(req.params.id, req.user.id);

@@ -105,12 +105,14 @@ async function seedDatabase() {
 
     if (!existingSuperAdmin && superAdminRole) {
       await User.create({
-        name: 'مدیر کل هیکاوب',
-        email: 'admin@hikaweb.ir',
-        password: 'HikawebAdmin@123',
+        name: 'مهدی صاحب علم',
+        email: 'mahdisahebelm@gmail.com',
+        password: '09191393479',
         role: superAdminRole._id,
         isEmailVerified: true,
-        language: 'fa'
+        language: 'fa',
+        phoneNumber: '09120997935',
+        isPhoneNumberVerified: true
       });
       logger.info('✅ کاربر مدیر کل ایجاد شد');
     }

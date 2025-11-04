@@ -18,7 +18,7 @@ export class ConsultationController {
    *             required:
    *               - fullName
    *               - email
-   *               - mobile
+   *               - phoneNumber
    *               - services
    *               - projectDescription
    *               - budget
@@ -86,6 +86,26 @@ export class ConsultationController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/consultations/{id}:
+   *   get:
+   *     summary: دریافت جزئیات درخواست مشاوره
+   *     tags: [Consultations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات درخواست دریافت شد
+   *       404:
+   *         description: درخواست مشاوره یافت نشد
+   */
   static async getConsultationById(req, res, next) {
     try {
       const consultation = await Consultation.findById(req.params.id)
@@ -108,6 +128,38 @@ export class ConsultationController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/consultations/{id}:
+   *   put:
+   *     summary: ویرایش درخواست مشاوره
+   *     tags: [Consultations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               requestStatus:
+   *                 type: string
+   *                 enum: [new, contacted, in_discussion, proposal_sent, accepted, rejected, converted]
+   *               notes:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: درخواست مشاوره با موفقیت ویرایش شد
+   *       404:
+   *         description: درخواست مشاوره یافت نشد
+   */
   static async updateConsultation(req, res, next) {
     try {
       const consultation = await ConsultationService.updateConsultation(
@@ -126,6 +178,38 @@ export class ConsultationController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/consultations/{id}/assign:
+   *   patch:
+   *     summary: واگذاری درخواست مشاوره به کاربر
+   *     tags: [Consultations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - assignedTo
+   *             properties:
+   *               assignedTo:
+   *                 type: string
+   *                 description: ID کاربر برای واگذاری
+   *     responses:
+   *       200:
+   *         description: درخواست مشاوره با موفقیت واگذار شد
+   *       404:
+   *         description: درخواست مشاوره یا کاربر یافت نشد
+   */
   static async assignConsultation(req, res, next) {
     try {
       const { assignedTo } = req.body;
@@ -139,6 +223,39 @@ export class ConsultationController {
         success: true,
         message: 'درخواست مشاوره با موفقیت واگذار شد',
         data: { consultation }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/consultations/{id}:
+   *   delete:
+   *     summary: حذف درخواست مشاوره
+   *     tags: [Consultations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: درخواست مشاوره با موفقیت حذف شد
+   *       404:
+   *         description: درخواست مشاوره یافت نشد
+   */
+  static async deleteConsultation(req, res, next) {
+    try {
+      await ConsultationService.deleteConsultation(req.params.id, req.user.id);
+
+      res.json({
+        success: true,
+        message: req.t('consultations.deleteSuccess')
       });
     } catch (error) {
       next(error);

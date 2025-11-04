@@ -1,6 +1,7 @@
 export const pagination = (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    // Default limit is 25 to match MUI TablePagination options (10, 25, 50, 100)
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 25));
     const skip = (page - 1) * limit;
   
     const sort = req.query.sort || '-createdAt';

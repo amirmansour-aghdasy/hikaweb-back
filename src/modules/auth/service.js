@@ -12,7 +12,7 @@ export class AuthService {
     try {
       // Check if user exists
       const existingUser = await User.findOne({
-        $or: [{ email: userData.email }, ...(userData.mobile ? [{ mobile: userData.mobile }] : [])]
+        $or: [{ email: userData.email }, ...(userData.phoneNumber ? [{ phoneNumber: userData.phoneNumber }] : [])]
       });
 
       if (existingUser) {
@@ -107,7 +107,7 @@ export class AuthService {
     }
   }
 
-  static async requestOTP(mobile) {
+  static async requestOTP(phoneNumber) {
     try {
       const otp = crypto.randomInt(100000, 999999).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -115,7 +115,7 @@ export class AuthService {
       // Store in Redis
       const redis = redisClient.getClient();
       await redis.setEx(
-        `otp:${mobile}`,
+        `otp:${phoneNumber}`,
         300,
         JSON.stringify({
           otp,
@@ -125,9 +125,9 @@ export class AuthService {
       );
 
       // Send SMS
-      await smsService.sendOTP(mobile, otp);
+      await smsService.sendOTP(phoneNumber, otp);
 
-      logger.info(`OTP sent to ${mobile}`);
+      logger.info(`OTP sent to ${phoneNumber}`);
 
       return {
         message: 'کد تایید ارسال شد',
@@ -139,10 +139,10 @@ export class AuthService {
     }
   }
 
-  static async verifyOTP(mobile, otp) {
+  static async verifyOTP(phoneNumber, otp) {
     try {
       const redis = redisClient.getClient();
-      const otpData = await redis.get(`otp:${mobile}`);
+      const otpData = await redis.get(`otp:${phoneNumber}`);
 
       if (!otpData) {
         throw new Error('کد تایید منقضی شده یا یافت نشد');
@@ -151,18 +151,18 @@ export class AuthService {
       const { otp: storedOTP, expiresAt, attempts } = JSON.parse(otpData);
 
       if (attempts >= 3) {
-        await redis.del(`otp:${mobile}`);
+        await redis.del(`otp:${phoneNumber}`);
         throw new Error('تلاش‌های زیادی انجام شده است');
       }
 
       if (new Date() > new Date(expiresAt)) {
-        await redis.del(`otp:${mobile}`);
+        await redis.del(`otp:${phoneNumber}`);
         throw new Error('کد تایید منقضی شده است');
       }
 
       if (otp !== storedOTP) {
         await redis.setEx(
-          `otp:${mobile}`,
+          `otp:${phoneNumber}`,
           300,
           JSON.stringify({
             otp: storedOTP,
@@ -174,23 +174,23 @@ export class AuthService {
       }
 
       // Clean up
-      await redis.del(`otp:${mobile}`);
+      await redis.del(`otp:${phoneNumber}`);
 
       // Find or create user
-      let user = await User.findOne({ mobile }).populate('role');
+      let user = await User.findOne({ phoneNumber }).populate('role');
 
       if (!user) {
         const defaultRole = await Role.findOne({ name: 'user' });
         user = new User({
-          mobile,
-          isMobileVerified: true,
+            phoneNumber,
+          isPhoneNumberVerified: true,
           role: defaultRole._id,
-          name: `کاربر_${mobile.slice(-4)}`
+          name: `کاربر_${phoneNumber.slice(-4)}`
         });
         await user.save();
         await user.populate('role');
       } else {
-        user.isMobileVerified = true;
+        user.isPhoneNumbereVerified = true;
         user.lastLogin = new Date();
         await user.save();
       }
@@ -317,6 +317,93 @@ export class AuthService {
     } catch (error) {
       logger.error('Change password error:', error);
       throw error;
+    }
+  }
+
+  static async googleAuth(googleId, email, name, avatar) {
+    try {
+      let user = await User.findOne({ googleId }).populate('role');
+
+      if (user) {
+        // Existing user - update last login
+        user.lastLogin = new Date();
+        await user.save();
+      } else {
+        // Check if user exists with this email
+        user = await User.findOne({ email }).populate('role');
+
+        if (user) {
+          // Link Google account to existing user
+          user.googleId = googleId;
+          if (avatar) user.avatar = avatar;
+          user.lastLogin = new Date();
+          await user.save();
+        } else {
+          // Create new user
+          const defaultRole = await Role.findOne({ name: 'user' });
+          if (!defaultRole) {
+            throw new Error('نقش پیش‌فرض یافت نشد');
+          }
+
+          user = new User({
+            name,
+            email,
+            googleId,
+            avatar,
+            role: defaultRole._id,
+            isEmailVerified: true,
+            lastLogin: new Date()
+          });
+
+          await user.save();
+          await user.populate('role');
+        }
+      }
+
+      const tokens = this.generateTokens(user);
+
+      // Store refresh token
+      user.refreshTokens.push({
+        token: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
+
+      // Keep only last 5 tokens
+      if (user.refreshTokens.length > 5) {
+        user.refreshTokens = user.refreshTokens.slice(-5);
+      }
+
+      await user.save();
+
+      return { user, tokens };
+    } catch (error) {
+      logger.error('Google auth error:', error);
+      throw error;
+    }
+  }
+
+  static async verifyGoogleToken(idToken) {
+    try {
+      // For production, use Google's token verification
+      // This is a simplified version - you should use google-auth-library in production
+      const axios = (await import('axios')).default;
+      const { config } = await import('../../config/environment.js');
+
+      const response = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+
+      if (response.data.aud !== config.GOOGLE_CLIENT_ID) {
+        throw new Error('Invalid Google token');
+      }
+
+      return {
+        googleId: response.data.sub,
+        email: response.data.email,
+        name: response.data.name,
+        avatar: response.data.picture
+      };
+    } catch (error) {
+      logger.error('Google token verification error:', error);
+      throw new Error('تایید توکن Google ناموفق بود');
     }
   }
 }

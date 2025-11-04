@@ -151,6 +151,26 @@ export class BrandController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/brands/{id}:
+   *   get:
+   *     summary: دریافت جزئیات برند
+   *     tags: [Brands]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات برند دریافت شد
+   *       404:
+   *         description: برند یافت نشد
+   */
   static async getBrandById(req, res, next) {
     try {
       const brand = await Brand.findById(req.params.id);
@@ -202,6 +222,52 @@ export class BrandController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/brands/{id}:
+   *   put:
+   *     summary: ویرایش برند
+   *     tags: [Brands]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 type: string
+   *               slug:
+   *                 type: string
+   *               logo:
+   *                 type: string
+   *               description:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               website:
+   *                 type: string
+   *               industry:
+   *                 type: string
+   *               serviceField:
+   *                 type: string
+   *               isFeatured:
+   *                 type: boolean
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: برند با موفقیت ویرایش شد
+   *       404:
+   *         description: برند یافت نشد
+   */
   static async updateBrand(req, res, next) {
     try {
       const brand = await BrandService.updateBrand(req.params.id, req.body, req.user.id);
@@ -216,6 +282,26 @@ export class BrandController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/brands/{id}:
+   *   delete:
+   *     summary: حذف برند
+   *     tags: [Brands]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: برند با موفقیت حذف شد
+   *       404:
+   *         description: برند یافت نشد
+   */
   static async deleteBrand(req, res, next) {
     try {
       await BrandService.deleteBrand(req.params.id, req.user.id);

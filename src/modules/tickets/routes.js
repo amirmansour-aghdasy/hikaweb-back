@@ -73,4 +73,11 @@ router.patch(
   TicketController.closeTicket
 );
 
+router.delete(
+  '/:id',
+  authorize(['tickets.delete', 'admin.all']),
+  auditLog('DELETE_TICKET', 'tickets'),
+  TicketController.deleteTicket
+);
+
 export default router;

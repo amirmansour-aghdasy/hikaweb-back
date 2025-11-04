@@ -86,6 +86,26 @@ export class ServiceController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/services/{id}:
+   *   get:
+   *     summary: دریافت جزئیات خدمت
+   *     tags: [Services]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات خدمت دریافت شد
+   *       404:
+   *         description: خدمت یافت نشد
+   */
   static async getServiceById(req, res, next) {
     try {
       const service = await Service.findById(req.params.id)
@@ -109,6 +129,30 @@ export class ServiceController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/services/slug/{slug}:
+   *   get:
+   *     summary: دریافت خدمت با آدرس یکتا
+   *     tags: [Services]
+   *     parameters:
+   *       - in: path
+   *         name: slug
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: lang
+   *         schema:
+   *           type: string
+   *           enum: [fa, en]
+   *           default: fa
+   *     responses:
+   *       200:
+   *         description: خدمت دریافت شد
+   *       404:
+   *         description: خدمت یافت نشد
+   */
   static async getServiceBySlug(req, res, next) {
     try {
       const { slug } = req.params;
@@ -125,6 +169,54 @@ export class ServiceController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/services/{id}:
+   *   put:
+   *     summary: ویرایش خدمت
+   *     tags: [Services]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               slug:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               description:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               shortDescription:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               icon:
+   *                 type: string
+   *               featuredImage:
+   *                 type: string
+   *               categories:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               isPopular:
+   *                 type: boolean
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: خدمت با موفقیت ویرایش شد
+   *       404:
+   *         description: خدمت یافت نشد
+   */
   static async updateService(req, res, next) {
     try {
       const service = await ServiceService.updateService(req.params.id, req.body, req.user.id);
@@ -139,6 +231,26 @@ export class ServiceController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/services/{id}:
+   *   delete:
+   *     summary: حذف خدمت
+   *     tags: [Services]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: خدمت با موفقیت حذف شد
+   *       404:
+   *         description: خدمت یافت نشد
+   */
   static async deleteService(req, res, next) {
     try {
       await ServiceService.deleteService(req.params.id, req.user.id);
@@ -152,6 +264,22 @@ export class ServiceController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/services/popular:
+   *   get:
+   *     summary: دریافت خدمات محبوب
+   *     tags: [Services]
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 6
+   *     responses:
+   *       200:
+   *         description: خدمات محبوب دریافت شدند
+   */
   static async getPopularServices(req, res, next) {
     try {
       const limit = parseInt(req.query.limit) || 6;

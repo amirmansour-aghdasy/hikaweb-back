@@ -43,7 +43,7 @@ export const faTranslations = {
       "deleteSuccess": "کاربر با موفقیت حذف شد",
       "notFound": "کاربر یافت نشد",
       "emailExists": "این ایمیل قبلاً ثبت شده است",
-      "mobileExists": "این شماره موبایل قبلاً ثبت شده است"
+      "phoneNumberExists": "این شماره موبایل قبلاً ثبت شده است"
     },
     "articles": {
       "createSuccess": "مقاله با موفقیت ایجاد شد",

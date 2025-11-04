@@ -10,7 +10,7 @@ class RedisClient {
   async connect() {
     try {
       this.client = Redis.createClient({ url: config.REDIS_URL });
-      this.client.on('error', (err) => logger.error('Redis error:', err));
+      this.client.on('error', err => logger.error('Redis error:', err));
       await this.client.connect();
       logger.info('Redis connected successfully');
       return this.client;

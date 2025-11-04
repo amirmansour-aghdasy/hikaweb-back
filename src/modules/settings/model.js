@@ -39,7 +39,7 @@ const settingsSchema = new mongoose.Schema(
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'ایمیل معتبر وارد کنید']
       },
       phone: String,
-      mobile: String,
+      phoneNumber: String,
       fax: String,
 
       address: {

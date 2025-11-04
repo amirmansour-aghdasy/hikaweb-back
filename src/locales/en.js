@@ -43,7 +43,7 @@ export const enTranslations = {
       "deleteSuccess": "User deleted successfully", 
       "notFound": "User not found",
       "emailExists": "This email is already registered",
-      "mobileExists": "This mobile number is already registered"
+      "phoneNumberExists": "This Phone Number number is already registered"
     },
     "articles": {
       "createSuccess": "Article created successfully",

@@ -76,7 +76,7 @@ export class ConsultationService {
         query.$or = [
           { fullName: new RegExp(search, 'i') },
           { email: new RegExp(search, 'i') },
-          { mobile: new RegExp(search, 'i') },
+          { phoneNumber: new RegExp(search, 'i') },
           { 'company.name': new RegExp(search, 'i') }
         ];
       }
@@ -160,7 +160,7 @@ export class ConsultationService {
 
 نام: ${consultation.fullName}
 ایمیل: ${consultation.email}
-موبایل: ${consultation.mobile}
+موبایل: ${consultation.phoneNumber}
 خدمات: ${services}
 بودجه: ${consultation.budget}
 زمان‌بندی: ${consultation.timeline}`;
@@ -173,11 +173,11 @@ export class ConsultationService {
         $or: [{ 'role.permissions': 'consultations.read' }, { 'role.permissions': 'admin.all' }]
       }).populate('role');
 
-      const adminMobiles = adminUsers.filter(user => user.mobile).map(user => user.mobile);
+      const adminPhoneNumber = adminUsers.filter(user => user.phoneNumber).map(user => user.phoneNumber);
 
-      if (adminMobiles.length > 0) {
+      if (adminPhoneNumbers.length > 0) {
         const smsMessage = `درخواست مشاوره جدید از ${consultation.fullName}. لطفاً وارد پنل شوید.`;
-        await smsService.sendBulk(adminMobiles, smsMessage);
+        await smsService.sendBulk(adminPhoneNumbers, smsMessage);
       }
     } catch (error) {
       logger.error('New consultation notification error:', error);
@@ -186,12 +186,31 @@ export class ConsultationService {
 
   static async notifyConsultationAssignment(consultation) {
     try {
-      if (consultation.assignedTo?.mobile) {
+      if (consultation.assignedTo?.phoneNumber) {
         const message = `درخواست مشاوره ${consultation.fullName} به شما واگذار شد. لطفاً پیگیری کنید.`;
-        await smsService.sendNotification(consultation.assignedTo.mobile, message);
+        await smsService.sendNotification(consultation.assignedTo.phoneNumber, message);
       }
     } catch (error) {
       logger.error('Assignment notification error:', error);
+    }
+  }
+
+  static async deleteConsultation(consultationId, userId) {
+    try {
+      const consultation = await Consultation.findById(consultationId);
+
+      if (!consultation) {
+        throw new Error('درخواست مشاوره یافت نشد');
+      }
+
+      // Soft delete
+      await consultation.softDelete(userId);
+
+      logger.info(`Consultation deleted: ${consultation._id} by user ${userId}`);
+      return true;
+    } catch (error) {
+      logger.error('Consultation deletion error:', error);
+      throw error;
     }
   }
 }

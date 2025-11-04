@@ -10,7 +10,13 @@ export const securityMiddleware = [
         scriptSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "https:"]
       }
-    }
+    },
+    // CSRF protection via SameSite cookies
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
   }),
   hpp({ whitelist: ['sort', 'fields', 'page', 'limit', 'filter'] })
 ];
+
+// CSRF protection is applied separately after authentication middleware
+export { csrfProtection } from './csrf.js';

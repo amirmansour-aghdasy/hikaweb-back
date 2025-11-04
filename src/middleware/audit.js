@@ -22,7 +22,19 @@ export const auditLog = (action, resource) => {
       // Notify critical actions
       const criticalActions = ['DELETE', 'CREATE_USER', 'UPDATE_ROLE'];
       if (criticalActions.includes(action)) {
-        baleService.sendAuditNotification(auditData);
+        // Format audit data for Bale notification
+        const formattedAuditData = {
+          action,
+          resource,
+          user: req.user?.email || req.user?.name || 'Unknown',
+          details: `${req.method} ${req.originalUrl}`,
+          timestamp: new Date().toLocaleString('fa-IR')
+        };
+        
+        // Use sendAuditLog instead of sendAuditNotification
+        baleService.sendAuditLog(formattedAuditData).catch(err => {
+          auditLogger.error('Failed to send audit notification to Bale:', err);
+        });
       }
 
       originalSend.call(this, data);

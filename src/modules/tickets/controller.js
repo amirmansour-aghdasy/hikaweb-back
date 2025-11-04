@@ -467,4 +467,39 @@ export class TicketController {
       next(error);
     }
   }
+
+  /**
+   * @swagger
+   * /api/v1/tickets/{id}:
+   *   delete:
+   *     summary: حذف تیکت
+   *     tags: [Tickets]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: تیکت با موفقیت حذف شد
+   *       404:
+   *         description: تیکت یافت نشد
+   *       403:
+   *         description: دسترسی غیرمجاز
+   */
+  static async deleteTicket(req, res, next) {
+    try {
+      await TicketService.deleteTicket(req.params.id, req.user.id);
+
+      res.json({
+        success: true,
+        message: req.t('tickets.deleteSuccess')
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

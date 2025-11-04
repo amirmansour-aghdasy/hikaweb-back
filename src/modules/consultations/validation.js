@@ -11,7 +11,7 @@ export const createConsultationSchema = Joi.object({
     'string.email': 'فرمت ایمیل صحیح نیست'
   }),
 
-  mobile: Joi.string()
+  phoneNumber: Joi.string()
     .required()
     .pattern(/^(\+98|0)?9\d{9}$/)
     .messages({

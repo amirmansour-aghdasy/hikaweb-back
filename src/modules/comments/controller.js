@@ -194,6 +194,26 @@ export class CommentController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/comments/{id}:
+   *   get:
+   *     summary: دریافت جزئیات نظر
+   *     tags: [Comments]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات نظر دریافت شد
+   *       404:
+   *         description: نظر یافت نشد
+   */
   static async getCommentById(req, res, next) {
     try {
       const comment = await Comment.findById(req.params.id).populate(
@@ -217,6 +237,39 @@ export class CommentController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/comments/{id}:
+   *   put:
+   *     summary: ویرایش نظر
+   *     tags: [Comments]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               content:
+   *                 type: string
+   *               rating:
+   *                 type: integer
+   *                 minimum: 1
+   *                 maximum: 5
+   *     responses:
+   *       200:
+   *         description: نظر با موفقیت ویرایش شد
+   *       404:
+   *         description: نظر یافت نشد
+   */
   static async updateComment(req, res, next) {
     try {
       const comment = await CommentService.updateComment(req.params.id, req.body, req.user.id);
@@ -279,6 +332,26 @@ export class CommentController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/comments/{id}:
+   *   delete:
+   *     summary: حذف نظر
+   *     tags: [Comments]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: نظر با موفقیت حذف شد
+   *       404:
+   *         description: نظر یافت نشد
+   */
   static async deleteComment(req, res, next) {
     try {
       await CommentService.deleteComment(req.params.id, req.user.id);

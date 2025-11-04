@@ -38,4 +38,11 @@ router.patch(
   ConsultationController.assignConsultation
 );
 
+router.delete(
+  '/:id',
+  authorize(['consultations.delete']),
+  auditLog('DELETE_CONSULTATION', 'consultations'),
+  ConsultationController.deleteConsultation
+);
+
 export default router;

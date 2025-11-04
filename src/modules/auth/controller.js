@@ -27,7 +27,7 @@ export class AuthController {
    *               email:
    *                 type: string
    *                 format: email
-   *               mobile:
+   *               phoneNumber:
    *                 type: string
    *               password:
    *                 type: string
@@ -128,9 +128,9 @@ export class AuthController {
    *           schema:
    *             type: object
    *             required:
-   *               - mobile
+   *               - phoneNumber
    *             properties:
-   *               mobile:
+   *               phoneNumber:
    *                 type: string
    *     responses:
    *       200:
@@ -140,8 +140,8 @@ export class AuthController {
    */
   static async requestOTP(req, res, next) {
     try {
-      const { mobile } = req.body;
-      const result = await AuthService.requestOTP(mobile);
+      const { phoneNumber } = req.body;
+      const result = await AuthService.requestOTP(phoneNumber);
 
       res.json({
         success: true,
@@ -166,10 +166,10 @@ export class AuthController {
    *           schema:
    *             type: object
    *             required:
-   *               - mobile
+   *               - phoneNumber
    *               - otp
    *             properties:
-   *               mobile:
+   *               phoneNumber:
    *                 type: string
    *               otp:
    *                 type: string
@@ -182,8 +182,8 @@ export class AuthController {
    */
   static async verifyOTP(req, res, next) {
     try {
-      const { mobile, otp } = req.body;
-      const result = await AuthService.verifyOTP(mobile, otp);
+      const { phoneNumber, otp } = req.body;
+      const result = await AuthService.verifyOTP(phoneNumber, otp);
 
       res.json({
         success: true,
@@ -347,6 +347,259 @@ export class AuthController {
       res.json({
         success: true,
         message: req.t('auth.passwordChanged')
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/google:
+   *   post:
+   *     summary: ورود با Google OAuth
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - idToken
+   *             properties:
+   *               idToken:
+   *                 type: string
+   *                 description: Google ID Token
+   *     responses:
+   *       200:
+   *         description: ورود موفقیت‌آمیز
+   *       400:
+   *         description: خطای اعتبارسنجی
+   *       401:
+   *         description: توکن Google نامعتبر
+   */
+  static async googleAuth(req, res, next) {
+    try {
+      const { idToken } = req.body;
+
+      // Verify Google token
+      const googleUser = await AuthService.verifyGoogleToken(idToken);
+
+      // Authenticate or create user
+      const result = await AuthService.googleAuth(
+        googleUser.googleId,
+        googleUser.email,
+        googleUser.name,
+        googleUser.avatar
+      );
+
+      logger.info(`Google auth successful: ${googleUser.email}`);
+
+      res.json({
+        success: true,
+        message: req.t('auth.loginSuccess'),
+        data: {
+          user: result.user,
+          tokens: result.tokens
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/csrf-token:
+   *   get:
+   *     summary: دریافت CSRF token
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: CSRF token دریافت شد
+   *       401:
+   *         description: عدم احراز هویت
+   */
+  static async getCsrfToken(req, res, next) {
+    try {
+      const { generateCsrfToken } = await import('../../middleware/csrf.js');
+      const token = await generateCsrfToken(req.user.id);
+
+      res.json({
+        success: true,
+        data: { csrfToken: token }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/session:
+   *   get:
+   *     summary: دریافت session فعلی (NextAuth compatible)
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Session دریافت شد
+   */
+  static async getSession(req, res, next) {
+    try {
+      if (!req.user) {
+        return res.json({
+          user: null,
+          expires: null
+        });
+      }
+
+      const user = await User.findById(req.user.id)
+        .populate('role')
+        .select('-refreshTokens -password');
+
+      if (!user) {
+        return res.json({
+          user: null,
+          expires: null
+        });
+      }
+
+      // NextAuth session format
+      res.json({
+        user: {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          image: user.avatar,
+          role: user.role.name,
+          permissions: user.role.permissions
+        },
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * NextAuth sign in handler
+   */
+  static async nextAuthSignIn(req, res, next) {
+    try {
+      const { provider } = req.params;
+      const { email, password, idToken, phoneNumber, otp, rememberMe } = req.body;
+
+      let result;
+
+      switch (provider) {
+        case 'credentials':
+          if (!email || !password) {
+            return res.status(400).json({
+              error: 'Missing credentials',
+              message: 'Email and password are required'
+            });
+          }
+          result = await AuthService.login(email, password, rememberMe);
+          break;
+
+        case 'google':
+          if (!idToken) {
+            return res.status(400).json({
+              error: 'Missing token',
+              message: 'Google ID token is required'
+            });
+          }
+          const googleUser = await AuthService.verifyGoogleToken(idToken);
+          result = await AuthService.googleAuth(
+            googleUser.googleId,
+            googleUser.email,
+            googleUser.name,
+            googleUser.avatar
+          );
+          break;
+
+        case 'sms':
+          if (!phoneNumber || !otp) {
+            return res.status(400).json({
+              error: 'Missing credentials',
+              message: 'phoneNumber and OTP are required'
+            });
+          }
+          result = await AuthService.verifyOTP(phoneNumber, otp);
+          break;
+
+        default:
+          return res.status(400).json({
+            error: 'Invalid provider',
+            message: `Provider ${provider} is not supported`
+          });
+      }
+
+      // NextAuth compatible response
+      res.json({
+        ok: true,
+        user: result.user,
+        account: {
+          provider,
+          accessToken: result.tokens.accessToken,
+          refreshToken: result.tokens.refreshToken,
+          expiresAt: Date.now() + (result.tokens.expiresIn || 86400) * 1000
+        }
+      });
+    } catch (error) {
+      logger.error('NextAuth sign in error:', error);
+      res.status(401).json({
+        error: 'Authentication failed',
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * NextAuth callback handler (for OAuth flows)
+   */
+  static async nextAuthCallback(req, res, next) {
+    try {
+      const { provider } = req.params;
+      const { code, state } = req.query;
+
+      // For OAuth callback flows, handle based on provider
+      if (provider === 'google' && code) {
+        // In a real implementation, exchange code for tokens
+        // For now, return error as direct token flow is already implemented
+        return res.status(400).json({
+          error: 'Use idToken flow',
+          message: 'Please use POST /api/v1/auth/google with idToken instead'
+        });
+      }
+
+      res.status(400).json({
+        error: 'Invalid callback',
+        message: 'Invalid callback request'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * NextAuth sign out handler
+   */
+  static async nextAuthSignOut(req, res, next) {
+    try {
+      const token = req.headers.authorization?.substring(7);
+      const { refreshToken } = req.body;
+
+      await AuthService.logout(token, refreshToken, req.user.id);
+
+      res.json({
+        ok: true,
+        url: '/'
       });
     } catch (error) {
       next(error);

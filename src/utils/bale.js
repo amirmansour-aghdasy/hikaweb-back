@@ -119,14 +119,26 @@ ${errorData.stack ? `<b>Stack:</b>\n<code>${errorData.stack.substring(0, 500)}..
       return false;
     }
 
+    const emojiMap = {
+      'CREATE_USER': '👤',
+      'UPDATE_USER': '✏️',
+      'DELETE_USER': '🗑️',
+      'DELETE': '🗑️',
+      'UPDATE_ROLE': '🔐',
+      'CREATE_ROLE': '➕',
+      'DELETE_ROLE': '🗑️'
+    };
+
+    const emoji = emojiMap[logData.action] || '📋';
+
     const message = `
-📋 <b>لاگ عملیات</b>
+${emoji} <b>لاگ عملیات</b>
 
 <b>عملیات:</b> ${logData.action}
-<b>کاربر:</b> ${logData.user}
-<b>منبع:</b> ${logData.resource}
+<b>کاربر:</b> ${logData.user || 'Unknown'}
+<b>منبع:</b> ${logData.resource || 'N/A'}
 <b>جزئیات:</b> ${logData.details || '-'}
-<b>زمان:</b> ${new Date().toLocaleString('fa-IR')}
+<b>زمان:</b> ${logData.timestamp || new Date().toLocaleString('fa-IR')}
     `.trim();
 
     return await this.sendToAdmins(message);

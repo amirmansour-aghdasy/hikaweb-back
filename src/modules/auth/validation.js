@@ -21,7 +21,7 @@ export const registerSchema = Joi.object({
       'any.required': 'ایمیل الزامی است'
     }),
 
-  mobile: Joi.string()
+    phoneNumber: Joi.string()
     .pattern(/^(\+98|0)?9\d{9}$/)
     .optional()
     .messages({
@@ -59,7 +59,7 @@ export const loginSchema = Joi.object({
 });
 
 export const otpRequestSchema = Joi.object({
-  mobile: Joi.string()
+    phoneNumber: Joi.string()
     .pattern(/^(\+98|0)?9\d{9}$/)
     .required()
     .messages({
@@ -69,7 +69,7 @@ export const otpRequestSchema = Joi.object({
 });
 
 export const otpVerifySchema = Joi.object({
-  mobile: Joi.string()
+    phoneNumber: Joi.string()
     .pattern(/^(\+98|0)?9\d{9}$/)
     .required(),
 
@@ -108,5 +108,13 @@ export const changePasswordSchema = Joi.object({
       'string.min': 'رمز عبور جدید باید حداقل ۸ کاراکتر باشد',
       'string.pattern.base': 'رمز عبور جدید باید شامل حروف کوچک، بزرگ و عدد باشد',
       'any.required': 'رمز عبور جدید الزامی است'
+    })
+});
+
+export const googleAuthSchema = Joi.object({
+  idToken: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'توکن Google الزامی است'
     })
 });

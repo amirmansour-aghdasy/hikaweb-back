@@ -128,6 +128,26 @@ export class FAQController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/faq/{id}:
+   *   get:
+   *     summary: دریافت جزئیات سوال متداول
+   *     tags: [FAQ]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات سوال متداول دریافت شد
+   *       404:
+   *         description: سوال متداول یافت نشد
+   */
   static async getFAQById(req, res, next) {
     try {
       const faq = await FAQ.findById(req.params.id)
@@ -187,6 +207,46 @@ export class FAQController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/faq/{id}:
+   *   put:
+   *     summary: ویرایش سوال متداول
+   *     tags: [FAQ]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               question:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               answer:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               serviceId:
+   *                 type: string
+   *               orderIndex:
+   *                 type: number
+   *               isPublic:
+   *                 type: boolean
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: سوال متداول با موفقیت ویرایش شد
+   *       404:
+   *         description: سوال متداول یافت نشد
+   */
   static async updateFAQ(req, res, next) {
     try {
       const faq = await FAQService.updateFAQ(req.params.id, req.body, req.user.id);
@@ -201,6 +261,26 @@ export class FAQController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/faq/{id}:
+   *   delete:
+   *     summary: حذف سوال متداول
+   *     tags: [FAQ]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: سوال متداول با موفقیت حذف شد
+   *       404:
+   *         description: سوال متداول یافت نشد
+   */
   static async deleteFAQ(req, res, next) {
     try {
       await FAQService.deleteFAQ(req.params.id, req.user.id);

@@ -93,6 +93,26 @@ export class PortfolioController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/portfolio/{id}:
+   *   get:
+   *     summary: دریافت جزئیات نمونه کار
+   *     tags: [Portfolio]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: جزئیات نمونه کار دریافت شد
+   *       404:
+   *         description: نمونه کار یافت نشد
+   */
   static async getPortfolioById(req, res, next) {
     try {
       const portfolio = await Portfolio.findById(req.params.id)
@@ -161,6 +181,50 @@ export class PortfolioController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/portfolio/{id}:
+   *   put:
+   *     summary: ویرایش نمونه کار
+   *     tags: [Portfolio]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               title:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               slug:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               description:
+   *                 $ref: '#/components/schemas/MultiLanguageText'
+   *               featuredImage:
+   *                 type: string
+   *               client:
+   *                 type: object
+   *               services:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               status:
+   *                 type: string
+   *                 enum: [active, inactive, archived]
+   *     responses:
+   *       200:
+   *         description: نمونه کار با موفقیت ویرایش شد
+   *       404:
+   *         description: نمونه کار یافت نشد
+   */
   static async updatePortfolio(req, res, next) {
     try {
       const portfolio = await PortfolioService.updatePortfolio(
@@ -179,6 +243,26 @@ export class PortfolioController {
     }
   }
 
+  /**
+   * @swagger
+   * /api/v1/portfolio/{id}:
+   *   delete:
+   *     summary: حذف نمونه کار
+   *     tags: [Portfolio]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: نمونه کار با موفقیت حذف شد
+   *       404:
+   *         description: نمونه کار یافت نشد
+   */
   static async deletePortfolio(req, res, next) {
     try {
       await PortfolioService.deletePortfolio(req.params.id, req.user.id);

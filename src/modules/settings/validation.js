@@ -21,7 +21,7 @@ export const updateSettingsSchema = Joi.object({
   contact: Joi.object({
     email: Joi.string().email(),
     phone: Joi.string(),
-    mobile: Joi.string(),
+    phoneNumber: Joi.string(),
     fax: Joi.string(),
     address: Joi.object({
       fa: Joi.string(),

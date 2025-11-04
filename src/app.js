@@ -15,11 +15,13 @@ import { swaggerSpec } from './config/swagger.js';
 import { i18nMiddleware } from './middleware/i18n.js';
 import { pagination } from './middleware/pagination.js';
 import { generalLimiter } from './middleware/rateLimit.js';
-import { securityMiddleware } from './middleware/security.js';
+import { securityMiddleware, csrfProtection } from './middleware/security.js';
 import { mongoSanitization } from './middleware/validation.js';
+import { authenticate } from './middleware/auth.js';
 
 // Import all module routes
 import authRoutes from './modules/auth/routes.js';
+import nextAuthRoutes from './modules/auth/nextAuthRoutes.js';
 import userRoutes from './modules/users/routes.js';
 import articleRoutes from './modules/articles/routes.js';
 import serviceRoutes from './modules/services/routes.js';
@@ -34,6 +36,9 @@ import consultationRoutes from './modules/consultations/routes.js';
 import mediaRoutes from './modules/media/routes.js';
 import settingsRoutes from './modules/settings/routes.js';
 import carouselRoutes from './modules/carousel/routes.js';
+import analyticsRoutes from './modules/analytics/routes.js';
+import notificationRoutes from './modules/notifications/routes.js';
+import roleRoutes from './modules/roles/routes.js';
 
 class App {
   constructor() {
@@ -47,7 +52,13 @@ class App {
   async initializeDatabase() {
     try {
       await Database.connect();
-      await redisClient.connect();
+      
+      try {
+        await redisClient.connect();
+      } catch (redisError) {
+        logger.warn('Redis unavailable, continuing without cache');
+      }
+      
       logger.info('✅ Database connections established');
     } catch (error) {
       logger.error('❌ Database initialization failed:', error);
@@ -64,11 +75,23 @@ class App {
       cors({
         origin:
           config.NODE_ENV === 'production'
-            ? ['https://hikaweb.ir', 'https://www.hikaweb.ir', 'https://admin.hikaweb.ir']
-            : true,
+            ? ['https://hikaweb.ir', 'https://www.hikaweb.ir', 'https://dashboard.hikaweb.ir']
+            : [
+                'http://localhost:1281',
+                'http://localhost:3000',
+                'http://127.0.0.1:1281',
+                'http://127.0.0.1:3000'
+              ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language']
+        allowedHeaders: [
+          'Content-Type',
+          'Authorization',
+          'Accept-Language',
+          'X-CSRF-Token',
+          'X-Requested-With'
+        ],
+        exposedHeaders: ['X-CSRF-Token']
       })
     );
 
@@ -84,6 +107,9 @@ class App {
 
     // Internationalization
     this.app.use(i18nMiddleware);
+
+    // CSRF protection (after auth but before routes)
+    // Note: CSRF is applied conditionally in routes that need it
 
     // Pagination helper
     this.app.use(pagination);
@@ -132,7 +158,10 @@ class App {
 
     // Authentication & Users
     apiRouter.use('/auth', authRoutes);
+    // NextAuth compatible routes (for Next.js frontend)
+    this.app.use('/api/auth', nextAuthRoutes);
     apiRouter.use('/users', userRoutes);
+    apiRouter.use('/roles', roleRoutes);
 
     // Content Management
     apiRouter.use('/articles', articleRoutes);
@@ -152,6 +181,10 @@ class App {
     apiRouter.use('/media', mediaRoutes);
     apiRouter.use('/settings', settingsRoutes);
     apiRouter.use('/carousel', carouselRoutes);
+
+    // Analytics & Notifications
+    apiRouter.use('/analytics', analyticsRoutes);
+    apiRouter.use('/notifications', notificationRoutes);
 
     // Mount API routes
     this.app.use('/api/v1', apiRouter);
