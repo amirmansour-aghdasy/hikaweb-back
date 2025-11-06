@@ -61,7 +61,7 @@ export class ConsultationService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         search = '',
         requestStatus = '',
         assignedTo = '',
@@ -69,6 +69,9 @@ export class ConsultationService {
         dateFrom = '',
         dateTo = ''
       } = filters;
+
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
 
       let query = { deletedAt: null };
 
@@ -91,7 +94,7 @@ export class ConsultationService {
         if (dateTo) query.createdAt.$lte = new Date(dateTo);
       }
 
-      const skip = (page - 1) * limit;
+      const skip = (parsedPage - 1) * parsedLimit;
 
       const [consultations, total] = await Promise.all([
         Consultation.find(query)
@@ -99,19 +102,19 @@ export class ConsultationService {
           .populate('assignedTo', 'name email')
           .sort({ createdAt: -1 })
           .skip(skip)
-          .limit(limit),
+          .limit(parsedLimit),
         Consultation.countDocuments(query)
       ]);
 
       return {
         data: consultations,
         pagination: {
-          page,
-          limit,
+          page: parsedPage,
+          limit: parsedLimit,
           total,
-          totalPages: Math.ceil(total / limit),
-          hasNext: page < Math.ceil(total / limit),
-          hasPrev: page > 1
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: parsedPage < Math.ceil(total / parsedLimit),
+          hasPrev: parsedPage > 1
         }
       };
     } catch (error) {

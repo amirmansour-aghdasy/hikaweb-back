@@ -85,7 +85,7 @@ export class CommentService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         status = 'approved',
         referenceType,
         referenceId,

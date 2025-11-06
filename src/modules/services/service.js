@@ -124,7 +124,7 @@ export class ServiceService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         search = '',
         category = '',
         isPopular,
@@ -132,6 +132,9 @@ export class ServiceService {
         sortBy = 'orderIndex',
         sortOrder = 'asc'
       } = filters;
+
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
 
       let query = { deletedAt: null };
 
@@ -153,26 +156,26 @@ export class ServiceService {
       const sortOptions = {};
       sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-      const skip = (page - 1) * limit;
+      const skip = (parsedPage - 1) * parsedLimit;
 
       const [services, total] = await Promise.all([
         Service.find(query)
           .populate('categories', 'name slug')
           .sort(sortOptions)
           .skip(skip)
-          .limit(limit),
+          .limit(parsedLimit),
         Service.countDocuments(query)
       ]);
 
       return {
         data: services,
         pagination: {
-          page,
-          limit,
+          page: parsedPage,
+          limit: parsedLimit,
           total,
-          totalPages: Math.ceil(total / limit),
-          hasNext: page < Math.ceil(total / limit),
-          hasPrev: page > 1
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: parsedPage < Math.ceil(total / parsedLimit),
+          hasPrev: parsedPage > 1
         }
       };
     } catch (error) {

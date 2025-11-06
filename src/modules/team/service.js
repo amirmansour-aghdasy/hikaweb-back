@@ -36,7 +36,7 @@ export class TeamService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         status = 'active',
         search,
         sortBy = 'orderIndex',

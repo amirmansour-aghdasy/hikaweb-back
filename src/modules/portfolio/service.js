@@ -162,7 +162,7 @@ export class PortfolioService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         search = '',
         category = '',
         service = '',
@@ -171,6 +171,9 @@ export class PortfolioService {
         sortBy = 'orderIndex',
         sortOrder = 'asc'
       } = filters;
+
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
 
       let query = { deletedAt: null };
 
@@ -189,7 +192,7 @@ export class PortfolioService {
       const sortOptions = {};
       sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-      const skip = (page - 1) * limit;
+      const skip = (parsedPage - 1) * parsedLimit;
 
       const [portfolios, total] = await Promise.all([
         Portfolio.find(query)
@@ -197,19 +200,19 @@ export class PortfolioService {
           .populate('categories', 'name slug')
           .sort(sortOptions)
           .skip(skip)
-          .limit(limit),
+          .limit(parsedLimit),
         Portfolio.countDocuments(query)
       ]);
 
       return {
         data: portfolios,
         pagination: {
-          page,
-          limit,
+          page: parsedPage,
+          limit: parsedLimit,
           total,
-          totalPages: Math.ceil(total / limit),
-          hasNext: page < Math.ceil(total / limit),
-          hasPrev: page > 1
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: parsedPage < Math.ceil(total / parsedLimit),
+          hasPrev: parsedPage > 1
         }
       };
     } catch (error) {

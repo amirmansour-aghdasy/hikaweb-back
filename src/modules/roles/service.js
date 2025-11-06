@@ -31,6 +31,9 @@ export class RoleService {
     try {
       const { search, status, page = 1, limit = 25 } = options;
       
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
+      
       const query = { deletedAt: null };
       
       if (search) {
@@ -45,13 +48,13 @@ export class RoleService {
         query.status = status;
       }
 
-      const skip = (page - 1) * limit;
+      const skip = (parsedPage - 1) * parsedLimit;
 
       const [roles, total] = await Promise.all([
         Role.find(query)
           .sort({ priority: -1, createdAt: -1 })
           .skip(skip)
-          .limit(limit)
+          .limit(parsedLimit)
           .lean(),
         Role.countDocuments(query)
       ]);
@@ -60,9 +63,9 @@ export class RoleService {
         data: roles,
         pagination: {
           total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit)
+          page: parsedPage,
+          limit: parsedLimit,
+          totalPages: Math.ceil(total / parsedLimit)
         }
       };
     } catch (error) {

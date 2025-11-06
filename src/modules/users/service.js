@@ -115,13 +115,16 @@ export class UserService {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         search = '',
         role = '',
         status = '',
         sortBy = 'createdAt',
         sortOrder = 'desc'
       } = filters;
+
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
 
       let query = { deletedAt: null };
 
@@ -145,26 +148,26 @@ export class UserService {
       const sortOptions = {};
       sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-      const skip = (page - 1) * limit;
+      const skip = (parsedPage - 1) * parsedLimit;
 
       const [users, total] = await Promise.all([
         User.find(query)
           .populate('role', 'name displayName')
           .sort(sortOptions)
           .skip(skip)
-          .limit(limit),
+          .limit(parsedLimit),
         User.countDocuments(query)
       ]);
 
       return {
         data: users,
         pagination: {
-          page,
-          limit,
+          page: parsedPage,
+          limit: parsedLimit,
           total,
-          totalPages: Math.ceil(total / limit),
-          hasNext: page < Math.ceil(total / limit),
-          hasPrev: page > 1
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: parsedPage < Math.ceil(total / parsedLimit),
+          hasPrev: parsedPage > 1
         }
       };
     } catch (error) {
