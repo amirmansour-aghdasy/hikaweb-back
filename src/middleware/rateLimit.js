@@ -92,7 +92,7 @@ class ResilientRedisStore {
   constructor(options = {}) {
     this.prefix = options.prefix || 'rl:';
     this.windowMs = options.windowMs || 15 * 60 * 1000;
-    this.client = redisClient;
+    this.redisClientWrapper = redisClient;
     this.fallbackStore = new AdvancedMemoryStore();
     this.fallbackStore.windowMs = this.windowMs;
     this.redisAvailable = false;
@@ -101,12 +101,23 @@ class ResilientRedisStore {
     this.testRedisConnection();
   }
 
+  getClient() {
+    try {
+      return this.redisClientWrapper.getClient();
+    } catch (error) {
+      return null;
+    }
+  }
+
   async testRedisConnection() {
     try {
-      if (this.client && typeof this.client.ping === 'function') {
-        await this.client.ping();
+      const client = this.getClient();
+      if (client && typeof client.ping === 'function') {
+        await client.ping();
         this.redisAvailable = true;
         logger.info('Redis available for rate limiting');
+      } else {
+        this.redisAvailable = false;
       }
     } catch (error) {
       this.redisAvailable = false;
@@ -121,27 +132,17 @@ class ResilientRedisStore {
     }
 
     try {
-      const fullKey = this.prefix + key;
-      
-      // Handle both Redis v3 and v4+ APIs
-      let current;
-      if (typeof this.client.incr === 'function') {
-        current = await this.client.incr(fullKey);
-      } else if (typeof this.client.v4?.incr === 'function') {
-        current = await this.client.v4.incr(fullKey);
-      } else {
-        throw new Error('Unsupported Redis client version');
+      const client = this.getClient();
+      if (!client) {
+        throw new Error('Redis client not available');
       }
+
+      const fullKey = this.prefix + key;
+      const current = await client.incr(fullKey);
       
       if (current === 1) {
         const ttlSeconds = Math.ceil(this.windowMs / 1000);
-        
-        // Handle expire command for different Redis versions
-        if (typeof this.client.expire === 'function') {
-          await this.client.expire(fullKey, ttlSeconds);
-        } else if (typeof this.client.v4?.expire === 'function') {
-          await this.client.v4.expire(fullKey, ttlSeconds);
-        }
+        await client.expire(fullKey, ttlSeconds);
       }
       
       return {
@@ -161,16 +162,13 @@ class ResilientRedisStore {
     }
 
     try {
-      const fullKey = this.prefix + key;
-      
-      let current;
-      if (typeof this.client.decr === 'function') {
-        current = await this.client.decr(fullKey);
-      } else if (typeof this.client.v4?.decr === 'function') {
-        current = await this.client.v4.decr(fullKey);
-      } else {
-        throw new Error('Unsupported Redis client version');
+      const client = this.getClient();
+      if (!client) {
+        throw new Error('Redis client not available');
       }
+
+      const fullKey = this.prefix + key;
+      const current = await client.decr(fullKey);
       
       return Math.max(0, current);
     } catch (error) {
@@ -185,13 +183,13 @@ class ResilientRedisStore {
     }
 
     try {
-      const fullKey = this.prefix + key;
-      
-      if (typeof this.client.del === 'function') {
-        await this.client.del(fullKey);
-      } else if (typeof this.client.v4?.del === 'function') {
-        await this.client.v4.del(fullKey);
+      const client = this.getClient();
+      if (!client) {
+        throw new Error('Redis client not available');
       }
+
+      const fullKey = this.prefix + key;
+      await client.del(fullKey);
     } catch (error) {
       logger.warn('Redis reset failed:', error.message);
       await this.fallbackStore.resetKey(key);

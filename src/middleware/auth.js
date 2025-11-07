@@ -17,14 +17,20 @@ export const authenticate = async (req, res, next) => {
     const token = authHeader.substring(7);
     
     // Check blacklist
-    const redis = redisClient.getClient();
-    const isBlacklisted = await redis.get(`blacklist:${token}`);
-    
-    if (isBlacklisted) {
-      return res.status(401).json({
-        success: false,
-        message: req.t('auth.tokenInvalid')
-      });
+    try {
+      const redis = redisClient.getClient();
+      const isBlacklisted = await redis.get(`blacklist:${token}`);
+      
+      if (isBlacklisted) {
+        return res.status(401).json({
+          success: false,
+          message: req.t('auth.tokenInvalid')
+        });
+      }
+    } catch (redisError) {
+      // If Redis is unavailable, continue without blacklist check
+      // This ensures the system remains functional even if Redis is down
+      logger.warn('Redis unavailable for token blacklist check:', redisError.message);
     }
 
     const decoded = jwt.verify(token, config.JWT_SECRET);

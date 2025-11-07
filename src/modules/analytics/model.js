@@ -62,8 +62,7 @@ const analyticsSchema = new mongoose.Schema(
     // Date tracking
     date: {
       type: Date,
-      required: true,
-      index: true
+      required: true
     },
     
     // Referrer and source

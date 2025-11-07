@@ -7,11 +7,23 @@ import { logger } from '../utils/logger.js';
  */
 export class CacheService {
   /**
+   * Get the Redis client instance
+   */
+  static getClient() {
+    const client = redisClient.getClient();
+    if (!client) {
+      throw new Error('Redis client is not connected');
+    }
+    return client;
+  }
+
+  /**
    * Get value from cache
    */
   static async get(key) {
     try {
-      const value = await redisClient.get(key);
+      const client = this.getClient();
+      const value = await client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
       logger.error('Cache get error:', error);
@@ -24,7 +36,8 @@ export class CacheService {
    */
   static async set(key, value, ttl = 3600) {
     try {
-      await redisClient.setEx(key, ttl, JSON.stringify(value));
+      const client = this.getClient();
+      await client.setEx(key, ttl, JSON.stringify(value));
       return true;
     } catch (error) {
       logger.error('Cache set error:', error);
@@ -37,7 +50,8 @@ export class CacheService {
    */
   static async delete(key) {
     try {
-      await redisClient.del(key);
+      const client = this.getClient();
+      await client.del(key);
       return true;
     } catch (error) {
       logger.error('Cache delete error:', error);
@@ -50,9 +64,10 @@ export class CacheService {
    */
   static async deletePattern(pattern) {
     try {
-      const keys = await redisClient.keys(pattern);
+      const client = this.getClient();
+      const keys = await client.keys(pattern);
       if (keys.length > 0) {
-        await redisClient.del(keys);
+        await client.del(keys);
       }
       return true;
     } catch (error) {
@@ -66,7 +81,8 @@ export class CacheService {
    */
   static async exists(key) {
     try {
-      return await redisClient.exists(key);
+      const client = this.getClient();
+      return await client.exists(key);
     } catch (error) {
       logger.error('Cache exists error:', error);
       return false;
@@ -78,7 +94,8 @@ export class CacheService {
    */
   static async clear() {
     try {
-      await redisClient.flushAll();
+      const client = this.getClient();
+      await client.flushAll();
       return true;
     } catch (error) {
       logger.error('Cache clear error:', error);
@@ -91,10 +108,11 @@ export class CacheService {
    */
   static async getStats() {
     try {
-      const info = await redisClient.info('memory');
+      const client = this.getClient();
+      const info = await client.info('memory');
       return {
         memory: info,
-        keyCount: await redisClient.dbSize()
+        keyCount: await client.dbSize()
       };
     } catch (error) {
       logger.error('Cache stats error:', error);

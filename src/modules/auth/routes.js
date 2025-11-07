@@ -3,7 +3,8 @@ import { AuthController } from './controller.js';
 import { validate } from '../../middleware/validation.js';
 import { authenticate } from '../../middleware/auth.js';
 import { auditLog } from '../../middleware/audit.js';
-import { authLimiter, otpLimiter } from '../../middleware/rateLimit.js';
+import { authLimiter, otpLimiter, passwordResetLimiter } from '../../middleware/rateLimit.js';
+import { requireDashboardAccess } from '../../middleware/dashboardAccess.js';
 import { 
   registerSchema, 
   loginSchema, 
@@ -11,7 +12,11 @@ import {
   otpVerifySchema,
   refreshTokenSchema,
   changePasswordSchema,
-  googleAuthSchema
+  googleAuthSchema,
+  dashboardOTPRequestSchema,
+  dashboardOTPVerifySchema,
+  passwordResetRequestSchema,
+  passwordResetSchema
 } from './validation.js';
 
 const router = Router();
@@ -57,6 +62,36 @@ router.post('/google',
   AuthController.googleAuth
 );
 
+// Dashboard OTP routes (public)
+router.post('/dashboard/otp/request',
+  otpLimiter,
+  validate(dashboardOTPRequestSchema),
+  auditLog('DASHBOARD_OTP_REQUEST', 'users'),
+  AuthController.requestDashboardOTP
+);
+
+router.post('/dashboard/otp/verify',
+  authLimiter,
+  validate(dashboardOTPVerifySchema),
+  auditLog('DASHBOARD_OTP_VERIFY', 'users'),
+  AuthController.verifyDashboardOTP
+);
+
+// Password reset routes (public)
+router.post('/password/reset/request',
+  passwordResetLimiter,
+  validate(passwordResetRequestSchema),
+  auditLog('PASSWORD_RESET_REQUEST', 'users'),
+  AuthController.requestPasswordReset
+);
+
+router.post('/password/reset',
+  passwordResetLimiter,
+  validate(passwordResetSchema),
+  auditLog('PASSWORD_RESET', 'users'),
+  AuthController.resetPassword
+);
+
 // Protected routes
 router.use(authenticate);
 
@@ -70,6 +105,7 @@ router.post('/logout',
 );
 
 router.get('/me',
+  requireDashboardAccess,
   AuthController.me
 );
 

@@ -118,3 +118,62 @@ export const googleAuthSchema = Joi.object({
       'any.required': 'توکن Google الزامی است'
     })
 });
+
+export const dashboardOTPRequestSchema = Joi.object({
+  email: Joi.string()
+    .email()
+    .lowercase()
+    .trim()
+    .required()
+    .messages({
+      'string.email': 'فرمت ایمیل صحیح نیست',
+      'any.required': 'ایمیل الزامی است'
+    })
+});
+
+export const dashboardOTPVerifySchema = Joi.object({
+  email: Joi.string()
+    .email()
+    .lowercase()
+    .trim()
+    .required(),
+  otp: Joi.string()
+    .length(6)
+    .pattern(/^\d+$/)
+    .required()
+    .messages({
+      'string.length': 'کد تایید باید ۶ رقم باشد',
+      'string.pattern.base': 'کد تایید باید عددی باشد',
+      'any.required': 'کد تایید الزامی است'
+    })
+});
+
+export const passwordResetRequestSchema = Joi.object({
+  email: Joi.string()
+    .email()
+    .lowercase()
+    .trim()
+    .required()
+    .messages({
+      'string.email': 'فرمت ایمیل صحیح نیست',
+      'any.required': 'ایمیل الزامی است'
+    })
+});
+
+export const passwordResetSchema = Joi.object({
+  token: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'توکن بازنشانی الزامی است'
+    }),
+  newPassword: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .required()
+    .messages({
+      'string.min': 'رمز عبور جدید باید حداقل ۸ کاراکتر باشد',
+      'string.pattern.base': 'رمز عبور جدید باید شامل حروف کوچک، بزرگ و عدد باشد',
+      'any.required': 'رمز عبور جدید الزامی است'
+    })
+});

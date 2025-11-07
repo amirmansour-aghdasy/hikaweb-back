@@ -17,7 +17,9 @@ import { pagination } from './middleware/pagination.js';
 import { generalLimiter } from './middleware/rateLimit.js';
 import { securityMiddleware, csrfProtection } from './middleware/security.js';
 import { mongoSanitization } from './middleware/validation.js';
+import { requestValidation } from './middleware/requestValidation.js';
 import { authenticate } from './middleware/auth.js';
+import { SecurityUtils } from './utils/security.js';
 
 // Import all module routes
 import authRoutes from './modules/auth/routes.js';
@@ -39,6 +41,11 @@ import carouselRoutes from './modules/carousel/routes.js';
 import analyticsRoutes from './modules/analytics/routes.js';
 import notificationRoutes from './modules/notifications/routes.js';
 import roleRoutes from './modules/roles/routes.js';
+import logRoutes from './modules/logs/routes.js';
+import taskRoutes from './modules/tasks/routes.js';
+import calendarRoutes from './modules/calendar/routes.js';
+import systemRoutes from './modules/system/routes.js';
+import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
   constructor() {
@@ -52,23 +59,46 @@ class App {
   async initializeDatabase() {
     try {
       await Database.connect();
+      await SystemLogger.logDatabaseConnection('success', {
+        uri: config.MONGODB_URI?.replace(/\/\/.*@/, '//***@') // Hide credentials
+      });
       
       try {
         await redisClient.connect();
+        await SystemLogger.logRedisConnection('success');
       } catch (redisError) {
         logger.warn('Redis unavailable, continuing without cache');
+        await SystemLogger.logRedisConnection('failed', {
+          error: redisError.message
+        });
       }
       
       logger.info('✅ Database connections established');
     } catch (error) {
       logger.error('❌ Database initialization failed:', error);
+      await SystemLogger.logDatabaseConnection('failed', {
+        error: error.message
+      });
       process.exit(1);
     }
   }
 
   initializeMiddleware() {
+    // Validate environment security
+    try {
+      SecurityUtils.validateEnvironment();
+    } catch (error) {
+      logger.error('Environment validation failed:', error);
+      if (config.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    }
+
     // Security middleware
     this.app.use(securityMiddleware);
+
+    // Request validation
+    this.app.use(requestValidation);
 
     // CORS configuration
     this.app.use(
@@ -186,6 +216,18 @@ class App {
     apiRouter.use('/analytics', analyticsRoutes);
     apiRouter.use('/notifications', notificationRoutes);
 
+    // System Logs
+    apiRouter.use('/logs', logRoutes);
+
+    // Tasks
+    apiRouter.use('/tasks', taskRoutes);
+
+    // Calendar
+    apiRouter.use('/calendar', calendarRoutes);
+
+    // System
+    apiRouter.use('/system', systemRoutes);
+
     // Mount API routes
     this.app.use('/api/v1', apiRouter);
 
@@ -211,7 +253,10 @@ class App {
           consultations: '/api/v1/consultations',
           media: '/api/v1/media',
           settings: '/api/v1/settings',
-          carousel: '/api/v1/carousel'
+          carousel: '/api/v1/carousel',
+          logs: '/api/v1/logs',
+          tasks: '/api/v1/tasks',
+          calendar: '/api/v1/calendar'
         },
         contact: {
           website: 'https://hikaweb.ir',

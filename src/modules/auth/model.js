@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { config } from '../../config/environment.js';
 import {
   baseSchemaFields,
   baseSchemaMethods,
@@ -96,7 +97,8 @@ Object.assign(userSchema.statics, baseSchemaStatics);
 
 userSchema.pre('save', async function (next) {
   if (this.isModified('password')) {
-    this.password = await bcrypt.hash(this.password, 12);
+    const saltRounds = config.BCRYPT_SALT_ROUNDS || 12;
+    this.password = await bcrypt.hash(this.password, saltRounds);
   }
   next();
 });

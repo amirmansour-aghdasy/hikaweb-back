@@ -24,6 +24,9 @@ const notificationSchema = new mongoose.Schema(
         'article_published',
         'service_created',
         'portfolio_created',
+        'task_assigned',
+        'task_updated',
+        'calendar_event',
         'system_alert',
         'other'
       ]

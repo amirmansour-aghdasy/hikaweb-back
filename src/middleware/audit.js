@@ -1,5 +1,6 @@
 import { auditLogger } from '../utils/logger.js';
 import { baleService } from '../utils/bale.js';
+import { LogService } from '../modules/logs/service.js';
 
 export const auditLog = (action, resource) => {
   return async (req, res, next) => {
@@ -17,7 +18,61 @@ export const auditLog = (action, resource) => {
         statusCode: res.statusCode
       };
 
+      // Log to winston (file-based)
       auditLogger.info('Audit Log', auditData);
+
+      // Log to MongoDB (Activity Log) if user is authenticated
+      if (req.user && req.user.id) {
+        // Map HTTP methods to action types
+        let logAction = action;
+        if (!logAction) {
+          switch (req.method) {
+            case 'POST':
+              logAction = 'CREATE';
+              break;
+            case 'GET':
+              logAction = 'READ';
+              break;
+            case 'PUT':
+            case 'PATCH':
+              logAction = 'UPDATE';
+              break;
+            case 'DELETE':
+              logAction = 'DELETE';
+              break;
+            default:
+              logAction = 'READ';
+          }
+        }
+
+        // Extract changes from request body if available
+        let changes = {};
+        if (req.method === 'PUT' || req.method === 'PATCH') {
+          changes = req.body || {};
+        }
+
+        // Create activity log in MongoDB
+        LogService.createActivityLog({
+          user: req.user.id,
+          action: logAction,
+          resource: resource || req.originalUrl.split('/')[2] || 'unknown',
+          resourceId: req.params.id || req.body?.id || null,
+          description: `${logAction} ${resource || req.originalUrl}`,
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          method: req.method,
+          url: req.originalUrl,
+          statusCode: res.statusCode,
+          changes,
+          metadata: {
+            query: req.query,
+            params: req.params
+          }
+        }).catch(err => {
+          // Don't break the request if logging fails
+          auditLogger.error('Failed to create activity log:', err);
+        });
+      }
 
       // Notify critical actions
       const criticalActions = ['DELETE', 'CREATE_USER', 'UPDATE_ROLE'];

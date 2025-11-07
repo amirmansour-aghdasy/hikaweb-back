@@ -320,6 +320,227 @@ export class AuthService {
     }
   }
 
+  /**
+   * Request OTP for dashboard login via SMS
+   * User must have phoneNumber and be an admin role
+   */
+  static async requestOTPForDashboard(email) {
+    try {
+      // Find user by email and check if they have dashboard access
+      const user = await User.findOne({ email, deletedAt: null }).populate('role');
+      
+      if (!user) {
+        throw new Error('کاربری با این ایمیل یافت نشد');
+      }
+
+      // Check if user has dashboard access
+      const allowedRoles = ['super_admin', 'admin', 'editor', 'moderator'];
+      const userRole = user.role?.name || user.role;
+      
+      if (!allowedRoles.includes(userRole)) {
+        throw new Error('شما دسترسی به پنل مدیریت ندارید');
+      }
+
+      // Check if user has phoneNumber
+      if (!user.phoneNumber) {
+        throw new Error('شماره موبایل ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید');
+      }
+
+      // Generate OTP
+      const otp = crypto.randomInt(100000, 999999).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      // Store in Redis with email as key (for dashboard)
+      const redis = redisClient.getClient();
+      await redis.setEx(
+        `otp:dashboard:${email}`,
+        300,
+        JSON.stringify({
+          otp,
+          expiresAt,
+          attempts: 0
+        })
+      );
+
+      // Send SMS
+      await smsService.sendOTP(user.phoneNumber, otp);
+
+      logger.info(`Dashboard OTP sent to ${email} (${user.phoneNumber})`);
+
+      return {
+        message: 'کد تایید به شماره موبایل شما ارسال شد',
+        expiresIn: 300
+      };
+    } catch (error) {
+      logger.error('Dashboard OTP request error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify OTP for dashboard login
+   */
+  static async verifyOTPForDashboard(email, otp) {
+    try {
+      const redis = redisClient.getClient();
+      const otpData = await redis.get(`otp:dashboard:${email}`);
+
+      if (!otpData) {
+        throw new Error('کد تایید منقضی شده یا یافت نشد');
+      }
+
+      const { otp: storedOTP, expiresAt, attempts } = JSON.parse(otpData);
+
+      if (attempts >= 3) {
+        await redis.del(`otp:dashboard:${email}`);
+        throw new Error('تلاش‌های زیادی انجام شده است. لطفاً دوباره درخواست دهید');
+      }
+
+      if (new Date() > new Date(expiresAt)) {
+        await redis.del(`otp:dashboard:${email}`);
+        throw new Error('کد تایید منقضی شده است');
+      }
+
+      if (otp !== storedOTP) {
+        await redis.setEx(
+          `otp:dashboard:${email}`,
+          300,
+          JSON.stringify({
+            otp: storedOTP,
+            expiresAt,
+            attempts: attempts + 1
+          })
+        );
+        throw new Error('کد تایید نادرست است');
+      }
+
+      // Clean up
+      await redis.del(`otp:dashboard:${email}`);
+
+      // Find user
+      const user = await User.findOne({ email, deletedAt: null }).populate('role');
+      
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Update last login
+      user.lastLogin = new Date();
+      await user.save();
+
+      // Generate tokens
+      const tokens = this.generateTokens(user);
+
+      return { user, tokens };
+    } catch (error) {
+      logger.error('Dashboard OTP verification error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Request password reset
+   * Generates a reset token and sends it via SMS
+   */
+  static async requestPasswordReset(email) {
+    try {
+      const user = await User.findOne({ email, deletedAt: null });
+
+      if (!user) {
+        // Don't reveal if user exists or not (security best practice)
+        return {
+          message: 'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازنشانی رمز عبور ارسال خواهد شد'
+        };
+      }
+
+      // Check if user has phoneNumber
+      if (!user.phoneNumber) {
+        throw new Error('شماره موبایل ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید');
+      }
+
+      // Generate reset token
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Store in Redis
+      const redis = redisClient.getClient();
+      await redis.setEx(
+        `password-reset:${resetToken}`,
+        3600,
+        JSON.stringify({
+          userId: user._id.toString(),
+          email: user.email,
+          expiresAt: resetTokenExpiry
+        })
+      );
+
+      // Send reset token via SMS
+      const resetLink = `${process.env.DASHBOARD_URL || 'http://localhost:3000'}/auth/reset-password?token=${resetToken}`;
+      const smsMessage = `لینک بازنشانی رمز عبور شما: ${resetLink}`;
+      
+      await smsService.sendNotification(user.phoneNumber, smsMessage);
+
+      logger.info(`Password reset requested for ${email}`);
+
+      return {
+        message: 'لینک بازنشانی رمز عبور به شماره موبایل شما ارسال شد',
+        // In production, don't return the token. For now, return it for testing
+        token: process.env.NODE_ENV === 'development' ? resetToken : undefined
+      };
+    } catch (error) {
+      logger.error('Password reset request error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset password with token
+   */
+  static async resetPassword(token, newPassword) {
+    try {
+      const redis = redisClient.getClient();
+      const resetData = await redis.get(`password-reset:${token}`);
+
+      if (!resetData) {
+        throw new Error('لینک بازنشانی نامعتبر یا منقضی شده است');
+      }
+
+      const { userId, email, expiresAt } = JSON.parse(resetData);
+
+      if (new Date() > new Date(expiresAt)) {
+        await redis.del(`password-reset:${token}`);
+        throw new Error('لینک بازنشانی منقضی شده است');
+      }
+
+      // Find user
+      const user = await User.findById(userId);
+
+      if (!user || user.email !== email) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Update password
+      user.password = newPassword;
+      await user.save();
+
+      // Clear all refresh tokens
+      user.refreshTokens = [];
+      await user.save();
+
+      // Delete reset token
+      await redis.del(`password-reset:${token}`);
+
+      logger.info(`Password reset for user ${email}`);
+
+      return {
+        message: 'رمز عبور با موفقیت تغییر کرد'
+      };
+    } catch (error) {
+      logger.error('Password reset error:', error);
+      throw error;
+    }
+  }
+
   static async googleAuth(googleId, email, name, avatar) {
     try {
       let user = await User.findOne({ googleId }).populate('role');

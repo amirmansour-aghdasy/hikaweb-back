@@ -379,6 +379,174 @@ export class AuthController {
    *       401:
    *         description: توکن Google نامعتبر
    */
+  /**
+   * @swagger
+   * /api/v1/auth/dashboard/otp/request:
+   *   post:
+   *     summary: درخواست کد OTP برای ورود به داشبورد
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *     responses:
+   *       200:
+   *         description: کد OTP ارسال شد
+   *       400:
+   *         description: خطای اعتبارسنجی
+   *       403:
+   *         description: دسترسی به داشبورد ندارید
+   */
+  static async requestDashboardOTP(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await AuthService.requestOTPForDashboard(email);
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: {
+          expiresIn: result.expiresIn,
+          ...(result.token && { token: result.token }) // Only in development
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/dashboard/otp/verify:
+   *   post:
+   *     summary: تایید کد OTP برای ورود به داشبورد
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *               - otp
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *               otp:
+   *                 type: string
+   *                 length: 6
+   *     responses:
+   *       200:
+   *         description: ورود موفقیت‌آمیز
+   *       400:
+   *         description: کد OTP نامعتبر
+   */
+  static async verifyDashboardOTP(req, res, next) {
+    try {
+      const { email, otp } = req.body;
+      const result = await AuthService.verifyOTPForDashboard(email, otp);
+
+      res.json({
+        success: true,
+        message: req.t('auth.loginSuccess'),
+        data: {
+          user: result.user,
+          tokens: result.tokens
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/password/reset/request:
+   *   post:
+   *     summary: درخواست بازنشانی رمز عبور
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *     responses:
+   *       200:
+   *         description: لینک بازنشانی ارسال شد
+   */
+  static async requestPasswordReset(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await AuthService.requestPasswordReset(email);
+
+      res.json({
+        success: true,
+        message: result.message,
+        ...(result.token && { data: { token: result.token } }) // Only in development
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/password/reset:
+   *   post:
+   *     summary: بازنشانی رمز عبور با توکن
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - token
+   *               - newPassword
+   *             properties:
+   *               token:
+   *                 type: string
+   *               newPassword:
+   *                 type: string
+   *                 minLength: 8
+   *     responses:
+   *       200:
+   *         description: رمز عبور با موفقیت تغییر کرد
+   *       400:
+   *         description: توکن نامعتبر یا منقضی شده
+   */
+  static async resetPassword(req, res, next) {
+    try {
+      const { token, newPassword } = req.body;
+      const result = await AuthService.resetPassword(token, newPassword);
+
+      res.json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async googleAuth(req, res, next) {
     try {
       const { idToken } = req.body;

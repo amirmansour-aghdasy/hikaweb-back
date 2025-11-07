@@ -3,16 +3,19 @@ import { baleService } from '../utils/bale.js';
 import { AppError } from '../utils/appError.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { HTTP_STATUS } from '../utils/httpStatus.js';
+import { SystemLogger } from '../utils/systemLogger.js';
+import { SecurityUtils } from '../utils/security.js';
+import { config } from '../config/environment.js';
 
 /**
  * Global Error Handler Middleware
  * Handles all types of errors including AppError, MongoDB errors, and system errors
  */
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = async (err, req, res, next) => {
   // Get user language preference
   const language = req.language || req.headers['accept-language'] || 'fa';
   
-  // Log error details
+  // Log error details to winston
   logger.error('Error occurred:', {
     error: err.message,
     stack: err.stack,
@@ -24,6 +27,24 @@ export const errorHandler = (err, req, res, next) => {
     body: req.method === 'POST' || req.method === 'PUT' ? req.body : undefined,
     timestamp: new Date().toISOString()
   });
+
+  // Log critical errors to MongoDB System Log
+  if (err.statusCode >= 500 || !err.statusCode) {
+    await SystemLogger.logCriticalError(
+      `خطای سیستم: ${err.message}`,
+      err,
+      {
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip,
+        user: req.user?.email || 'Anonymous',
+        statusCode: err.statusCode
+      }
+    ).catch(logErr => {
+      // Don't break error handling if logging fails
+      logger.error('Failed to log system error:', logErr);
+    });
+  }
 
   let error = { ...err };
   error.message = err.message;
@@ -100,12 +121,18 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Sanitize error message for production
+  const isDevelopment = config.NODE_ENV === 'development';
+  const sanitizedMessage = isDevelopment 
+    ? error.message 
+    : SecurityUtils.sanitizeErrorMessage(error, false);
+
   // Prepare response
   const response = {
     success: false,
-    message: error.message,
+    message: sanitizedMessage,
     ...(error.details && { details: error.details }),
-    ...(process.env.NODE_ENV === 'development' && {
+    ...(isDevelopment && {
       stack: error.stack,
       error: err
     })
