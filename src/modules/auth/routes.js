@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AuthController } from './controller.js';
 import { validate } from '../../middleware/validation.js';
-import { authenticate } from '../../middleware/auth.js';
+import { authenticate, optionalAuth } from '../../middleware/auth.js';
 import { auditLog } from '../../middleware/audit.js';
 import { authLimiter, otpLimiter, passwordResetLimiter } from '../../middleware/rateLimit.js';
 import { requireDashboardAccess } from '../../middleware/dashboardAccess.js';
@@ -92,16 +92,31 @@ router.post('/password/reset',
   AuthController.resetPassword
 );
 
+// WebAuthn public routes (authentication)
+router.post('/webauthn/authenticate/options',
+  authLimiter,
+  AuthController.getWebAuthnAuthenticationOptions
+);
+
+router.post('/webauthn/authenticate',
+  authLimiter,
+  auditLog('WEBAUTHN_AUTHENTICATE', 'users'),
+  AuthController.authenticateWebAuthn
+);
+
+// Logout route - authenticate is optional (for cleanup even if token is invalid)
+// Must be before router.use(authenticate) to use optionalAuth
+router.post('/logout',
+  optionalAuth, // Try to authenticate, but don't fail if token is missing/invalid
+  auditLog('LOGOUT', 'users'),
+  AuthController.logout
+);
+
 // Protected routes
 router.use(authenticate);
 
 router.get('/csrf-token',
   AuthController.getCsrfToken
-);
-
-router.post('/logout',
-  auditLog('LOGOUT', 'users'),
-  AuthController.logout
 );
 
 router.get('/me',
@@ -113,6 +128,30 @@ router.put('/change-password',
   validate(changePasswordSchema),
   auditLog('CHANGE_PASSWORD', 'users'),
   AuthController.changePassword
+);
+
+// WebAuthn protected routes (registration and management)
+router.post('/webauthn/register/options',
+  requireDashboardAccess,
+  auditLog('WEBAUTHN_REGISTER_OPTIONS', 'users'),
+  AuthController.getWebAuthnRegistrationOptions
+);
+
+router.post('/webauthn/register',
+  requireDashboardAccess,
+  auditLog('WEBAUTHN_REGISTER', 'users'),
+  AuthController.registerWebAuthn
+);
+
+router.get('/webauthn/credentials',
+  requireDashboardAccess,
+  AuthController.getWebAuthnCredentials
+);
+
+router.delete('/webauthn/credentials/:id',
+  requireDashboardAccess,
+  auditLog('WEBAUTHN_DELETE_CREDENTIAL', 'users'),
+  AuthController.deleteWebAuthnCredential
 );
 
 export default router;

@@ -84,23 +84,7 @@ class App {
   }
 
   initializeMiddleware() {
-    // Validate environment security
-    try {
-      SecurityUtils.validateEnvironment();
-    } catch (error) {
-      logger.error('Environment validation failed:', error);
-      if (config.NODE_ENV === 'production') {
-        process.exit(1);
-      }
-    }
-
-    // Security middleware
-    this.app.use(securityMiddleware);
-
-    // Request validation
-    this.app.use(requestValidation);
-
-    // CORS configuration
+    // CORS configuration - MUST be first to handle preflight requests
     this.app.use(
       cors({
         origin:
@@ -121,9 +105,27 @@ class App {
           'X-CSRF-Token',
           'X-Requested-With'
         ],
-        exposedHeaders: ['X-CSRF-Token']
+        exposedHeaders: ['X-CSRF-Token'],
+        preflightContinue: false,
+        optionsSuccessStatus: 204
       })
     );
+
+    // Validate environment security
+    try {
+      SecurityUtils.validateEnvironment();
+    } catch (error) {
+      logger.error('Environment validation failed:', error);
+      if (config.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    }
+
+    // Security middleware
+    this.app.use(securityMiddleware);
+
+    // Request validation
+    this.app.use(requestValidation);
 
     // Body parsing
     this.app.use(express.json({ limit: '10mb' }));

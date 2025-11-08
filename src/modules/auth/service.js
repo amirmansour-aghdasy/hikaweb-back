@@ -245,27 +245,34 @@ export class AuthService {
 
   static async logout(token, refreshToken, userId) {
     try {
-      const redis = redisClient.getClient();
-
-      // Blacklist access token
-      const decoded = jwt.decode(token);
-      const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
-
-      if (expiresIn > 0) {
-        await redis.setEx(`blacklist:${token}`, expiresIn, 'true');
+      // Blacklist access token (if provided)
+      if (token) {
+        try {
+          const redis = redisClient.getClient();
+          const decoded = jwt.decode(token);
+          if (decoded && decoded.exp) {
+            const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
+            if (expiresIn > 0) {
+              await redis.setEx(`blacklist:${token}`, expiresIn, 'true');
+            }
+          }
+        } catch (redisError) {
+          // If Redis is unavailable, continue without blacklist
+          logger.warn('Redis unavailable for token blacklist:', redisError.message);
+        }
       }
 
-      // Remove refresh token
+      // Remove refresh token (if provided)
       if (refreshToken && userId) {
         await User.findByIdAndUpdate(userId, {
           $pull: { refreshTokens: { token: refreshToken } }
         });
       }
 
-      logger.info(`User ${userId} logged out`);
+      logger.info(`User ${userId || 'unknown'} logged out`);
     } catch (error) {
       logger.error('Logout error:', error);
-      throw error;
+      // Don't throw - logout should always succeed even if cleanup fails
     }
   }
 

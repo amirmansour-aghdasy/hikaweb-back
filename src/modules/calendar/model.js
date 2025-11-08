@@ -21,8 +21,7 @@ const calendarEventSchema = new mongoose.Schema(
     
     startDate: {
       type: Date,
-      required: true,
-      index: true
+      required: true
     },
     
     endDate: {

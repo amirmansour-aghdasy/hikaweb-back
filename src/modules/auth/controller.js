@@ -1,6 +1,7 @@
 import { AuthService } from './service.js';
 import { User } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { WebAuthnService } from './webauthnService.js';
 
 export class AuthController {
   /**
@@ -262,16 +263,24 @@ export class AuthController {
   static async logout(req, res, next) {
     try {
       const token = req.headers.authorization?.substring(7);
-      const { refreshToken } = req.body;
+      const { refreshToken } = req.body || {};
 
-      await AuthService.logout(token, refreshToken, req.user.id);
+      // Logout should work even if user is not authenticated (for cleanup)
+      const userId = req.user?.id || null;
+      
+      await AuthService.logout(token, refreshToken, userId);
 
       res.json({
         success: true,
         message: req.t('auth.logoutSuccess')
       });
     } catch (error) {
-      next(error);
+      // Logout should always succeed, even if there's an error
+      logger.error('Logout controller error:', error);
+      res.json({
+        success: true,
+        message: req.t('auth.logoutSuccess')
+      });
     }
   }
 
@@ -768,6 +777,239 @@ export class AuthController {
       res.json({
         ok: true,
         url: '/'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/register/options:
+   *   post:
+   *     summary: دریافت گزینه‌های ثبت‌نام بایومتریک
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               deviceName:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: گزینه‌های ثبت‌نام
+   */
+  static async getWebAuthnRegistrationOptions(req, res, next) {
+    try {
+      const { deviceName } = req.body;
+      const options = await WebAuthnService.generateRegistrationOptions(req.user.id, deviceName);
+
+      res.json({
+        success: true,
+        data: options
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/register:
+   *   post:
+   *     summary: ثبت credential بایومتریک
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - response
+   *             properties:
+   *               response:
+   *                 type: object
+   *               deviceName:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: ثبت موفقیت‌آمیز
+   */
+  static async registerWebAuthn(req, res, next) {
+    try {
+      const { response, deviceName } = req.body;
+      const result = await WebAuthnService.verifyRegistration(req.user.id, response, deviceName);
+
+      res.json({
+        success: true,
+        message: 'احراز هویت بایومتریک با موفقیت ثبت شد',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/authenticate/options:
+   *   post:
+   *     summary: دریافت گزینه‌های احراز هویت بایومتریک
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *     responses:
+   *       200:
+   *         description: گزینه‌های احراز هویت
+   */
+  static async getWebAuthnAuthenticationOptions(req, res, next) {
+    try {
+      const { email } = req.body;
+      const options = await WebAuthnService.generateAuthenticationOptions(email);
+
+      res.json({
+        success: true,
+        data: options
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/authenticate:
+   *   post:
+   *     summary: احراز هویت با بایومتریک
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *               - response
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *               response:
+   *                 type: object
+   *     responses:
+   *       200:
+   *         description: احراز هویت موفقیت‌آمیز
+   */
+  static async authenticateWebAuthn(req, res, next) {
+    try {
+      const { email, response } = req.body;
+      const result = await WebAuthnService.verifyAuthentication(email, response);
+
+      if (!result.verified) {
+        return res.status(401).json({
+          success: false,
+          message: 'احراز هویت ناموفق بود'
+        });
+      }
+
+      // Generate tokens
+      const tokens = AuthService.generateTokens(result.user);
+
+      // Store refresh token
+      result.user.refreshTokens.push({
+        token: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
+
+      // Keep only last 5 tokens
+      if (result.user.refreshTokens.length > 5) {
+        result.user.refreshTokens = result.user.refreshTokens.slice(-5);
+      }
+
+      await result.user.save();
+
+      res.json({
+        success: true,
+        message: 'ورود با موفقیت انجام شد',
+        data: {
+          user: result.user,
+          tokens
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/credentials:
+   *   get:
+   *     summary: دریافت لیست credentials بایومتریک کاربر
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: لیست credentials
+   */
+  static async getWebAuthnCredentials(req, res, next) {
+    try {
+      const credentials = await WebAuthnService.getUserCredentials(req.user.id);
+
+      res.json({
+        success: true,
+        data: credentials
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/webauthn/credentials/:id:
+   *   delete:
+   *     summary: حذف credential بایومتریک
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: حذف موفقیت‌آمیز
+   */
+  static async deleteWebAuthnCredential(req, res, next) {
+    try {
+      const { id } = req.params;
+      await WebAuthnService.deleteCredential(req.user.id, id);
+
+      res.json({
+        success: true,
+        message: 'Credential با موفقیت حذف شد'
       });
     } catch (error) {
       next(error);
