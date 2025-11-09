@@ -25,11 +25,18 @@ export const config = {
     BALE_BOT_TOKEN: process.env.BALE_BOT_TOKEN,
     BALE_ADMIN_CHAT_IDS: process.env.BALE_ADMIN_CHAT_IDS, // Comma-separated
     
-    // Arvan Drive
+    // Arvan Drive (Legacy - for backward compatibility)
     ARVAN_DRIVE_ACCESS_KEY: process.env.ARVAN_DRIVE_ACCESS_KEY,
     ARVAN_DRIVE_SECRET_KEY: process.env.ARVAN_DRIVE_SECRET_KEY,
     ARVAN_DRIVE_BUCKET: process.env.ARVAN_DRIVE_BUCKET,
     ARVAN_DRIVE_REGION: process.env.ARVAN_DRIVE_REGION || 'ir-thr-at1',
+    
+    // Arvan Object Storage (New)
+    ARVAN_OBJECT_STORAGE_API_KEY: process.env.ARVAN_OBJECT_STORAGE_API_KEY,
+    ARVAN_OBJECT_STORAGE_ACCESS_KEY: process.env.ARVAN_OBJECT_STORAGE_ACCESS_KEY || process.env.ARVAN_DRIVE_ACCESS_KEY,
+    ARVAN_OBJECT_STORAGE_SECRET_KEY: process.env.ARVAN_OBJECT_STORAGE_SECRET_KEY || process.env.ARVAN_DRIVE_SECRET_KEY,
+    ARVAN_OBJECT_STORAGE_BUCKET: process.env.ARVAN_OBJECT_STORAGE_BUCKET || process.env.ARVAN_DRIVE_BUCKET,
+    ARVAN_OBJECT_STORAGE_REGION: process.env.ARVAN_OBJECT_STORAGE_REGION || process.env.ARVAN_DRIVE_REGION || 'ir-thr-at1',
     
     // Security
     BCRYPT_SALT_ROUNDS: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12,

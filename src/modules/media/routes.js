@@ -39,6 +39,9 @@ router.post(
 // Get media list
 router.get('/', authorize(['media.read']), MediaController.getMedia);
 
+// Get media statistics
+router.get('/statistics', authorize(['media.read']), MediaController.getStatistics);
+
 // Get single media
 router.get('/:id', authorize(['media.read']), MediaController.getMediaById);
 
@@ -66,6 +69,16 @@ router.post(
   validate(folderCreateSchema),
   auditLog('CREATE_FOLDER', 'media'),
   MediaController.createFolder
+);
+
+// Edit image
+router.post(
+  '/:id/edit',
+  uploadLimiter,
+  authorize(['media.update']),
+  upload.single('file'),
+  auditLog('EDIT_IMAGE', 'media'),
+  MediaController.editImage
 );
 
 export default router;

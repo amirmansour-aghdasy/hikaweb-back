@@ -71,11 +71,12 @@ export class CategoryController {
    */
   static async getCategories(req, res, next) {
     try {
-      const categories = await CategoryService.getCategories(req.query);
+      const result = await CategoryService.getCategories(req.query);
 
       res.json({
         success: true,
-        data: { categories }
+        data: { categories: result.data || result },
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

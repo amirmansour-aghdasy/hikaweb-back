@@ -98,7 +98,14 @@ export class CarouselService {
 
   static async getCarousels(filters = {}) {
     try {
-      const { position = '', isVisible = '', search = '', language = 'fa' } = filters;
+      const { 
+        position = '', 
+        isVisible = '', 
+        search = '', 
+        language = 'fa',
+        page = 1,
+        limit = 25
+      } = filters;
 
       let query = { deletedAt: null };
 
@@ -112,9 +119,30 @@ export class CarouselService {
         ];
       }
 
-      const carousels = await Carousel.find(query).sort({ position: 1, orderIndex: 1 });
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
+      const skip = (parsedPage - 1) * parsedLimit;
 
-      return carousels;
+      const [carousels, total] = await Promise.all([
+        Carousel.find(query)
+          .sort({ position: 1, orderIndex: 1 })
+          .skip(skip)
+          .limit(parsedLimit)
+          .lean(),
+        Carousel.countDocuments(query)
+      ]);
+
+      return {
+        data: carousels,
+        pagination: {
+          page: parsedPage,
+          limit: parsedLimit,
+          total,
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: skip + parsedLimit < total,
+          hasPrev: parsedPage > 1
+        }
+      };
     } catch (error) {
       logger.error('Get carousels error:', error);
       throw error;

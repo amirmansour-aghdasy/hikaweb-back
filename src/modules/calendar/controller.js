@@ -262,5 +262,35 @@ export class CalendarController {
       next(error);
     }
   }
+
+  /**
+   * @swagger
+   * /api/v1/calendar/statistics:
+   *   get:
+   *     summary: دریافت آمار تقویم
+   *     tags: [Calendar]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: آمار تقویم
+   */
+  static async getStatistics(req, res, next) {
+    try {
+      const userRole = req.user.role?.name || req.user.role;
+      const userId = (userRole !== 'super_admin' && userRole !== 'admin') 
+        ? req.user.id 
+        : null;
+
+      const statistics = await CalendarService.getCalendarStatistics(userId);
+
+      res.json({
+        success: true,
+        data: statistics
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 

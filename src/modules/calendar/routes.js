@@ -35,6 +35,11 @@ router.get('/upcoming',
   CalendarController.getUpcomingEvents
 );
 
+router.get('/statistics',
+  auditLog('READ', 'calendar'),
+  CalendarController.getStatistics
+);
+
 router.get('/:id',
   auditLog('READ', 'calendar'),
   CalendarController.getEventById

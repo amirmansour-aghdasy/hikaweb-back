@@ -98,14 +98,9 @@ export class MediaController {
    *         name: fileType
    *         schema:
    *           type: string
-   *           enum: [image, video, audio, document, archive, other]
-   *       - in: query
-   *         name: folder
-   *         schema:
-   *           type: string
    *     responses:
    *       200:
-   *         description: فایل‌های رسانه با موفقیت دریافت شدند
+   *         description: لیست فایل‌های رسانه
    */
   static async getMedia(req, res, next) {
     try {
@@ -113,7 +108,8 @@ export class MediaController {
 
       res.json({
         success: true,
-        ...result
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);
@@ -124,7 +120,7 @@ export class MediaController {
    * @swagger
    * /api/v1/media/{id}:
    *   get:
-   *     summary: دریافت تک فایل رسانه
+   *     summary: دریافت اطلاعات یک فایل رسانه
    *     tags: [Media]
    *     security:
    *       - bearerAuth: []
@@ -136,7 +132,7 @@ export class MediaController {
    *           type: string
    *     responses:
    *       200:
-   *         description: فایل رسانه دریافت شد
+   *         description: اطلاعات فایل رسانه
    *       404:
    *         description: رسانه یافت نشد
    */
@@ -164,7 +160,7 @@ export class MediaController {
    * @swagger
    * /api/v1/media/{id}:
    *   put:
-   *     summary: به‌روزرسانی اطلاعات رسانه
+   *     summary: به‌روزرسانی اطلاعات فایل رسانه
    *     tags: [Media]
    *     security:
    *       - bearerAuth: []
@@ -189,13 +185,6 @@ export class MediaController {
    *                   en:
    *                     type: string
    *               altText:
-   *                 type: object
-   *                 properties:
-   *                   fa:
-   *                     type: string
-   *                   en:
-   *                     type: string
-   *               caption:
    *                 type: object
    *                 properties:
    *                   fa:
@@ -301,16 +290,15 @@ export class MediaController {
    *               folderPath:
    *                 type: string
    *     responses:
-   *       201:
+   *       200:
    *         description: پوشه با موفقیت ایجاد شد
    */
   static async createFolder(req, res, next) {
     try {
-      const { folderPath } = req.body;
-
+      const folderPath = req.body.path || req.body.folder;
       await MediaService.createFolder(folderPath, req.user);
 
-      res.status(201).json({
+      res.json({
         success: true,
         message: req.t('media.folderCreated')
       });
@@ -323,7 +311,7 @@ export class MediaController {
    * @swagger
    * /api/v1/media/bulk-upload:
    *   post:
-   *     summary: آپلود چندین فایل همزمان
+   *     summary: آپلود چند فایل به صورت همزمان
    *     tags: [Media]
    *     security:
    *       - bearerAuth: []
@@ -339,9 +327,6 @@ export class MediaController {
    *                 items:
    *                   type: string
    *                   format: binary
-   *               folder:
-   *                 type: string
-   *                 default: /
    *     responses:
    *       201:
    *         description: فایل‌ها با موفقیت آپلود شدند
@@ -381,6 +366,161 @@ export class MediaController {
           uploaded: uploadedFiles,
           errors: errors
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/{id}/edit:
+   *   post:
+   *     summary: ویرایش تصویر (برش، چرخش، فیلتر)
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               file:
+   *                 type: string
+   *                 format: binary
+   *                 description: فایل تصویر ویرایش شده (اختیاری)
+   *               crop:
+   *                 type: string
+   *                 description: JSON string of crop area
+   *               rotation:
+   *                 type: string
+   *                 description: Rotation angle in degrees
+   *               flip:
+   *                 type: string
+   *                 description: JSON string of flip settings
+   *               filters:
+   *                 type: string
+   *                 description: JSON string of filter settings
+   *     responses:
+   *       200:
+   *         description: تصویر با موفقیت ویرایش شد
+   *       404:
+   *         description: رسانه یافت نشد
+   */
+  static async editImage(req, res, next) {
+    try {
+      const editOptions = {
+        file: req.file || null,
+        crop: req.body.crop ? JSON.parse(req.body.crop) : null,
+        rotation: req.body.rotation ? parseInt(req.body.rotation) : 0,
+        flip: req.body.flip ? JSON.parse(req.body.flip) : { horizontal: false, vertical: false },
+        filters: req.body.filters ? JSON.parse(req.body.filters) : null
+      };
+
+      const media = await MediaService.editImage(req.params.id, editOptions, req.user);
+
+      res.json({
+        success: true,
+        message: req.t('media.imageEdited') || 'تصویر با موفقیت ویرایش شد',
+        data: { media }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/{id}/edit:
+   *   post:
+   *     summary: ویرایش تصویر (برش، چرخش، فیلتر)
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               file:
+   *                 type: string
+   *                 format: binary
+   *                 description: فایل تصویر ویرایش شده (اختیاری)
+   *               crop:
+   *                 type: string
+   *                 description: JSON string of crop area
+   *               rotation:
+   *                 type: string
+   *                 description: Rotation angle in degrees
+   *               flip:
+   *                 type: string
+   *                 description: JSON string of flip settings
+   *               filters:
+   *                 type: string
+   *                 description: JSON string of filter settings
+   *     responses:
+   *       200:
+   *         description: تصویر با موفقیت ویرایش شد
+   *       404:
+   *         description: رسانه یافت نشد
+   */
+  static async editImage(req, res, next) {
+    try {
+      const editOptions = {
+        file: req.file || null,
+        crop: req.body.crop ? JSON.parse(req.body.crop) : null,
+        rotation: req.body.rotation ? parseInt(req.body.rotation) : 0,
+        flip: req.body.flip ? JSON.parse(req.body.flip) : { horizontal: false, vertical: false },
+        filters: req.body.filters ? JSON.parse(req.body.filters) : null
+      };
+
+      const media = await MediaService.editImage(req.params.id, editOptions, req.user);
+
+      res.json({
+        success: true,
+        message: req.t('media.imageEdited') || 'تصویر با موفقیت ویرایش شد',
+        data: { media }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/statistics:
+   *   get:
+   *     summary: دریافت آمار رسانه
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: آمار رسانه
+   */
+  static async getStatistics(req, res, next) {
+    try {
+      const statistics = await MediaService.getMediaStatistics();
+
+      res.json({
+        success: true,
+        data: statistics
       });
     } catch (error) {
       next(error);

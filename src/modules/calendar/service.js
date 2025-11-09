@@ -525,5 +525,53 @@ export class CalendarService {
       throw error;
     }
   }
+
+  /**
+   * Get calendar statistics
+   */
+  static async getCalendarStatistics(userId = null) {
+    try {
+      const query = userId ? {
+        $or: [
+          { organizer: userId },
+          { 'attendees.user': userId }
+        ]
+      } : {};
+
+      const [total, byType, upcoming, past] = await Promise.all([
+        CalendarEvent.countDocuments(query),
+        CalendarEvent.aggregate([
+          { $match: query },
+          {
+            $group: {
+              _id: '$type',
+              count: { $sum: 1 }
+            }
+          }
+        ]),
+        CalendarEvent.countDocuments({
+          ...query,
+          startDate: { $gte: new Date() }
+        }),
+        CalendarEvent.countDocuments({
+          ...query,
+          endDate: { $lt: new Date() }
+        })
+      ]);
+
+      return {
+        total,
+        byType: byType.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        upcoming,
+        past
+      };
+    } catch (error) {
+      logger.error('Error getting calendar statistics:', error);
+      throw error;
+    }
+  }
 }
 

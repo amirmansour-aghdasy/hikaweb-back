@@ -190,7 +190,7 @@ export class AuthService {
         await user.save();
         await user.populate('role');
       } else {
-        user.isPhoneNumbereVerified = true;
+        user.isPhoneNumberVerified = true;
         user.lastLogin = new Date();
         await user.save();
       }

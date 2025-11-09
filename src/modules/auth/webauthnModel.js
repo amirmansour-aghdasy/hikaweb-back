@@ -75,7 +75,7 @@ const webauthnCredentialSchema = new mongoose.Schema(
 
 // Indexes for efficient queries
 webauthnCredentialSchema.index({ user: 1, isActive: 1 });
-webauthnCredentialSchema.index({ credentialID: 1 });
+// Note: credentialID already has an index from unique: true, so no need to define it again
 
 // Methods
 webauthnCredentialSchema.methods.updateCounter = function(newCounter) {

@@ -60,11 +60,12 @@ export class CarouselController {
    */
   static async getCarousels(req, res, next) {
     try {
-      const carousels = await CarouselService.getCarousels(req.query);
+      const result = await CarouselService.getCarousels(req.query);
 
       res.json({
         success: true,
-        data: { carousels }
+        data: { carousels: result.data || result },
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

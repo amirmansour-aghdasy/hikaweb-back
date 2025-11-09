@@ -130,7 +130,15 @@ export class CategoryService {
 
   static async getCategories(filters = {}) {
     try {
-      const { type = '', parent = '', level = '', search = '', language = 'fa' } = filters;
+      const { 
+        type = '', 
+        parent = '', 
+        level = '', 
+        search = '', 
+        language = 'fa',
+        page = 1,
+        limit = 25
+      } = filters;
 
       let query = { deletedAt: null };
 
@@ -149,12 +157,32 @@ export class CategoryService {
         ];
       }
 
-      const categories = await Category.find(query)
-        .populate('parent', 'name')
-        .populate('children', 'name')
-        .sort({ orderIndex: 1, 'name.fa': 1 });
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 25;
+      const skip = (parsedPage - 1) * parsedLimit;
 
-      return categories;
+      const [categories, total] = await Promise.all([
+        Category.find(query)
+          .populate('parent', 'name')
+          .populate('children', 'name')
+          .sort({ orderIndex: 1, 'name.fa': 1 })
+          .skip(skip)
+          .limit(parsedLimit)
+          .lean(),
+        Category.countDocuments(query)
+      ]);
+
+      return {
+        data: categories,
+        pagination: {
+          page: parsedPage,
+          limit: parsedLimit,
+          total,
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: skip + parsedLimit < total,
+          hasPrev: parsedPage > 1
+        }
+      };
     } catch (error) {
       logger.error('Get categories error:', error);
       throw error;

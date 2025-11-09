@@ -6,7 +6,7 @@ import { Media } from './model.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/environment.js';
 import { FileProcessor } from '../../utils/fileProcessor.js';
-import { arvanDriveService } from '../../config/arvanDrive.js';
+import { arvanObjectStorageService } from '../../services/arvanObjectStorage.js';
 
 export class MediaService {
   static getMulterConfig() {
@@ -62,18 +62,19 @@ export class MediaService {
         };
 
         // Upload original
-        const originalUrl = await arvanDriveService.uploadFile(file.buffer, key, file.mimetype, {
-          type: 'original'
+        const originalUrl = await arvanObjectStorageService.uploadFile(file.buffer, key, file.mimetype, {
+          type: 'original',
+          isPublic: true
         });
 
         // Upload variants
         for (const [sizeName, variant] of Object.entries(processed.variants)) {
           const variantKey = key.replace(path.extname(key), `-${sizeName}.webp`);
-          const variantUrl = await arvanDriveService.uploadFile(
+          const variantUrl = await arvanObjectStorageService.uploadFile(
             variant.buffer,
             variantKey,
             'image/webp',
-            { type: 'variant', size: sizeName }
+            { type: 'variant', size: sizeName, isPublic: true }
           );
 
           variants.push({
@@ -105,7 +106,9 @@ export class MediaService {
         return mediaRecord;
       } else {
         // Handle non-image files
-        const uploadResult = await arvanDriveService.uploadFile(file.buffer, key, file.mimetype);
+        const uploadResult = await arvanObjectStorageService.uploadFile(file.buffer, key, file.mimetype, {
+          isPublic: true
+        });
 
         const mediaRecord = new Media({
           filename: uniqueFilename,
@@ -141,17 +144,24 @@ export class MediaService {
       }
 
       // Extract key from URL
+      // URL format: https://s3.ir-thr-at1.arvanstorage.ir/bucket-name/path/to/file.jpg
       const url = new URL(media.url);
-      const key = url.pathname.substring(1); // Remove leading slash
+      const pathParts = url.pathname.split('/').filter(p => p);
+      // Remove bucket name (first part) and get the rest as key
+      const bucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
+      const bucketIndex = pathParts.findIndex(p => p === bucketName);
+      const key = bucketIndex >= 0 ? pathParts.slice(bucketIndex + 1).join('/') : pathParts.join('/');
 
-      await arvanDriveService.deleteFile(key);
+      await arvanObjectStorageService.deleteFile(key);
 
       // Delete variants
       if (media.variants && media.variants.length > 0) {
         for (const variant of media.variants) {
           const variantUrl = new URL(variant.url);
-          const variantKey = variantUrl.pathname.substring(1);
-          await arvanDriveService.deleteFile(variantKey);
+          const variantPathParts = variantUrl.pathname.split('/').filter(p => p);
+          const variantBucketIndex = variantPathParts.findIndex(p => p === bucketName);
+          const variantKey = variantBucketIndex >= 0 ? variantPathParts.slice(variantBucketIndex + 1).join('/') : variantPathParts.join('/');
+          await arvanObjectStorageService.deleteFile(variantKey);
         }
       }
 
@@ -227,15 +237,111 @@ export class MediaService {
 
       // Create empty file to represent folder
       const key = `${normalizedPath}/.gitkeep`;
-      await arvanDriveService.uploadFile(Buffer.from(''), key, 'text/plain', {
+      await arvanObjectStorageService.uploadFile(Buffer.from(''), key, 'text/plain', {
         type: 'folder',
-        createdBy: user.id
+        createdBy: user.id,
+        isPublic: false
       });
 
       logger.info(`Folder created: ${normalizedPath} by ${user.email}`);
       return true;
     } catch (error) {
       logger.error('Folder creation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Edit image (crop, resize, rotate, apply filters)
+   */
+  static async editImage(mediaId, editOptions, user) {
+    try {
+      const media = await Media.findById(mediaId);
+      if (!media) {
+        throw new Error('رسانه یافت نشد');
+      }
+
+      if (media.fileType !== 'image') {
+        throw new Error('فقط تصاویر قابل ویرایش هستند');
+      }
+
+      // If a new file is uploaded (edited image from frontend)
+      if (editOptions.file) {
+        // Process the edited image
+        const fileType = FileProcessor.getFileTypeCategory(editOptions.file.mimetype);
+        const uniqueFilename = FileProcessor.generateUniqueFilename(editOptions.file.originalname || `edited-${media.filename}`);
+        const folder = media.folder || '/';
+        const key = `${folder}${uniqueFilename}`.replace('//', '/');
+
+        // Upload edited image
+        const uploadResult = await arvanObjectStorageService.uploadFile(
+          editOptions.file.buffer,
+          key,
+          editOptions.file.mimetype,
+          { type: 'edited', isPublic: true }
+        );
+
+        // Update media record with new URL
+        media.url = uploadResult.url;
+        media.filename = uniqueFilename;
+        media.updatedBy = user.id;
+        await media.save();
+
+        logger.info(`Image edited: ${mediaId} by ${user.email}`);
+        return media;
+      }
+
+      // If only edit options are provided (crop, rotate, etc.)
+      // TODO: Implement server-side image processing using sharp
+      // This would require downloading the image, processing it, and re-uploading
+      
+      logger.info(`Image edit options received: ${mediaId} by ${user.email}`);
+      return media;
+    } catch (error) {
+      logger.error('Image editing error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get media statistics
+   */
+  static async getMediaStatistics() {
+    try {
+      const [total, byFileType, totalSize] = await Promise.all([
+        Media.countDocuments(),
+        Media.aggregate([
+          {
+            $group: {
+              _id: '$fileType',
+              count: { $sum: 1 },
+              totalSize: { $sum: '$size' }
+            }
+          }
+        ]),
+        Media.aggregate([
+          {
+            $group: {
+              _id: null,
+              totalSize: { $sum: '$size' }
+            }
+          }
+        ])
+      ]);
+
+      return {
+        total,
+        byFileType: byFileType.reduce((acc, item) => {
+          acc[item._id] = {
+            count: item.count,
+            totalSize: item.totalSize
+          };
+          return acc;
+        }, {}),
+        totalSize: totalSize[0]?.totalSize || 0
+      };
+    } catch (error) {
+      logger.error('Error getting media statistics:', error);
       throw error;
     }
   }
