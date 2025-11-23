@@ -2,6 +2,7 @@ import { Database } from '../src/config/database.js';
 import { Role } from '../src/modules/users/roleModel.js';
 import { User } from '../src/modules/auth/model.js';
 import { Category } from '../src/modules/categories/model.js';
+import { Service } from '../src/modules/services/model.js';
 import { Settings } from '../src/modules/settings/model.js';
 import { logger } from '../src/utils/logger.js';
 
@@ -101,20 +102,56 @@ async function seedDatabase() {
 
     // Create super admin user
     const superAdminRole = await Role.findOne({ name: 'super_admin' });
-    const existingSuperAdmin = await User.findOne({ email: 'admin@hikaweb.ir' });
+    const existingSuperAdmin = await User.findOne({ email: 'mahdisahebelm@gmail.com' });
 
     if (!existingSuperAdmin && superAdminRole) {
-      await User.create({
-        name: 'مهدی صاحب علم',
-        email: 'mahdisahebelm@gmail.com',
-        password: '09191393479',
-        role: superAdminRole._id,
-        isEmailVerified: true,
-        language: 'fa',
-        phoneNumber: '09120997935',
-        isPhoneNumberVerified: true
-      });
-      logger.info('✅ کاربر مدیر کل ایجاد شد');
+      try {
+        await User.create({
+          name: 'مهدی صاحب علم',
+          email: 'mahdisahebelm@gmail.com',
+          password: '09191393479',
+          role: superAdminRole._id,
+          isEmailVerified: true,
+          language: 'fa',
+          phoneNumber: '09120997935',
+          isPhoneNumberVerified: true
+        });
+        logger.info('✅ کاربر مدیر کل ایجاد شد');
+      } catch (error) {
+        if (error.code !== 11000) { // Ignore duplicate key errors
+          logger.warn('⚠️  خطا در ایجاد کاربر مدیر کل:', error.message);
+        }
+      }
+    }
+
+    // Create test user for endpoint testing
+    const adminRole = await Role.findOne({ name: 'admin' });
+    const existingTestUser = await User.findOne({ email: 'test@example.com' });
+
+    if (!existingTestUser && adminRole) {
+      try {
+        await User.create({
+          name: 'کاربر تست',
+          email: 'test@example.com',
+          password: 'Test123456!',
+          role: adminRole._id,
+          isEmailVerified: true,
+          language: 'fa',
+          phoneNumber: '09123456789',
+          isPhoneNumberVerified: true
+        });
+        logger.info('✅ کاربر تست برای endpoint testing ایجاد شد');
+        logger.info('   Email: test@example.com');
+        logger.info('   Password: Test123456!');
+      } catch (error) {
+        if (error.code !== 11000) { // Ignore duplicate key errors
+          logger.warn('⚠️  خطا در ایجاد کاربر تست:', error.message);
+        } else {
+          logger.info('ℹ️  کاربر تست از قبل وجود دارد');
+        }
+      }
+    } else if (existingTestUser) {
+      logger.info('ℹ️  کاربر تست از قبل وجود دارد');
     }
 
     // Create default categories for each type
@@ -148,6 +185,52 @@ async function seedDatabase() {
         });
         logger.info(`✅ دسته‌بندی ${categoryType.name.fa} ایجاد شد`);
       }
+    }
+
+    // Create a default service for testing
+    let serviceCategory = await Category.findOne({ type: 'service' });
+    if (!serviceCategory) {
+      // Create service category if it doesn't exist
+      serviceCategory = await Category.create({
+        name: { fa: 'خدمات اصلی', en: 'Main Services' },
+        slug: { fa: 'main-services', en: 'main-services' },
+        description: {
+          fa: 'دسته‌بندی پیش‌فرض برای خدمات',
+          en: 'Default category for services'
+        },
+        type: 'service',
+        level: 0,
+        orderIndex: 0
+      });
+      logger.info('✅ دسته‌بندی خدمات ایجاد شد');
+    }
+    
+    const existingService = await Service.findOne({ 'slug.fa': 'web-development' });
+    if (!existingService) {
+      await Service.create({
+        name: {
+          fa: 'توسعه وب',
+          en: 'Web Development'
+        },
+        slug: {
+          fa: 'web-development',
+          en: 'web-development'
+        },
+        description: {
+          fa: 'ارائه خدمات حرفه‌ای طراحی و توسعه وب سایت با استفاده از آخرین تکنولوژی‌های روز. ما با تیمی متخصص و با تجربه آماده ارائه بهترین خدمات به شما هستیم.',
+          en: 'Providing professional web design and development services using the latest technologies. We are ready to provide you with the best services with a specialized and experienced team.'
+        },
+        shortDescription: {
+          fa: 'خدمات طراحی و توسعه وب حرفه‌ای',
+          en: 'Professional web design and development services'
+        },
+        categories: [serviceCategory._id],
+        orderIndex: 0,
+        isPopular: true
+      });
+      logger.info('✅ خدمت پیش‌فرض (توسعه وب) ایجاد شد');
+    } else {
+      logger.info('ℹ️  خدمت پیش‌فرض از قبل وجود دارد');
     }
 
     // Initialize settings

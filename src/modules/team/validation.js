@@ -20,7 +20,11 @@ export const createTeamMemberSchema = Joi.object({
     en: Joi.string()
   }).optional(),
 
-  avatar: Joi.string().optional(),
+  avatar: Joi.string().required(),
+
+  department: Joi.string()
+    .valid('management', 'development', 'design', 'marketing', 'sales', 'support')
+    .required(),
 
   email: Joi.string().email().optional(),
   phone: Joi.string().optional(),

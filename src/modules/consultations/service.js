@@ -176,7 +176,7 @@ export class ConsultationService {
         $or: [{ 'role.permissions': 'consultations.read' }, { 'role.permissions': 'admin.all' }]
       }).populate('role');
 
-      const adminPhoneNumber = adminUsers.filter(user => user.phoneNumber).map(user => user.phoneNumber);
+      const adminPhoneNumbers = adminUsers.filter(user => user.phoneNumber).map(user => user.phoneNumber);
 
       if (adminPhoneNumbers.length > 0) {
         const smsMessage = `درخواست مشاوره جدید از ${consultation.fullName}. لطفاً وارد پنل شوید.`;

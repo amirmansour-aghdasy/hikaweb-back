@@ -15,8 +15,19 @@ export class FAQService {
         }
       }
 
+      // Map serviceId to service for schema compatibility
+      const faqData = { ...data };
+      if (faqData.serviceId) {
+        faqData.service = faqData.serviceId;
+        delete faqData.serviceId;
+      }
+      if (faqData.categoryIds) {
+        faqData.category = Array.isArray(faqData.categoryIds) ? faqData.categoryIds[0] : faqData.categoryIds;
+        delete faqData.categoryIds;
+      }
+
       const faq = new FAQ({
-        ...data,
+        ...faqData,
         createdBy: userId,
         updatedBy: userId
       });
@@ -60,7 +71,7 @@ export class FAQService {
       }
 
       if (serviceId) {
-        filter.serviceId = serviceId;
+        filter.service = serviceId;
       }
 
       if (isPublic !== undefined) {
@@ -87,8 +98,8 @@ export class FAQService {
 
       const [faqs, total] = await Promise.all([
         FAQ.find(filter)
-          .populate('serviceId', 'name slug')
-          .populate('categoryIds', 'name slug')
+          .populate('service', 'name slug')
+          .populate('category', 'name slug')
           .sort(sortOptions)
           .skip(skip)
           .limit(parseInt(limit))
@@ -123,7 +134,7 @@ export class FAQService {
       if (cached) return cached;
 
       const faqs = await FAQ.find({
-        serviceId,
+        service: serviceId,
         status: 'active',
         isPublic: true,
         deletedAt: null
@@ -147,15 +158,26 @@ export class FAQService {
         throw new AppError('سوال متداول یافت نشد', 404);
       }
 
+      // Map serviceId to service for schema compatibility
+      const updateData = { ...data };
+      if (updateData.serviceId) {
+        updateData.service = updateData.serviceId;
+        delete updateData.serviceId;
+      }
+      if (updateData.categoryIds) {
+        updateData.category = Array.isArray(updateData.categoryIds) ? updateData.categoryIds[0] : updateData.categoryIds;
+        delete updateData.categoryIds;
+      }
+
       // Verify service exists if provided
-      if (data.serviceId) {
-        const service = await Service.findById(data.serviceId);
+      if (updateData.service) {
+        const service = await Service.findById(updateData.service);
         if (!service) {
           throw new AppError('سرویس مورد نظر یافت نشد', 404);
         }
       }
 
-      Object.assign(faq, data, { updatedBy: userId });
+      Object.assign(faq, updateData, { updatedBy: userId });
       await faq.save();
 
       // Clear cache
@@ -204,10 +226,10 @@ export class FAQService {
         isPublic: true,
         deletedAt: null
       })
-        .populate('serviceId', 'name slug')
+        .populate('service', 'name slug')
         .sort({ orderIndex: 1, createdAt: 1 })
         .limit(limit)
-        .select('question answer serviceId tags');
+        .select('question answer service tags');
 
       await cacheService.set(cacheKey, faqs, 600); // 10 minutes
       return faqs;

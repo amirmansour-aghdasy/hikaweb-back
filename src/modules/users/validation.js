@@ -14,6 +14,7 @@ export const createUserSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^(\+98|0)?9\d{9}$/)
     .optional()
+    .allow(null, '')
     .messages({
       'string.pattern.base': 'شماره موبایل صحیح نیست'
     }),
@@ -35,7 +36,11 @@ export const createUserSchema = Joi.object({
 
   language: Joi.string().valid('fa', 'en').default('fa'),
 
-  status: Joi.string().valid('active', 'inactive', 'archived').default('active')
+  status: Joi.string().valid('active', 'inactive', 'archived').default('active'),
+
+  isEmailVerified: Joi.boolean().optional(),
+
+  isPhoneNumberVerified: Joi.boolean().optional()
 });
 
 export const updateUserSchema = createUserSchema.fork(

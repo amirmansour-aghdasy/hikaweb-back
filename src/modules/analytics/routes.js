@@ -22,5 +22,12 @@ router.get(
   AnalyticsController.getAnalytics
 );
 
+// Get comprehensive statistics
+router.get(
+  '/comprehensive-stats',
+  authorize(['analytics.read', 'admin.all']),
+  AnalyticsController.getComprehensiveStats
+);
+
 export default router;
 

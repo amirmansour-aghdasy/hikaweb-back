@@ -1,6 +1,6 @@
 export const config = {
     NODE_ENV: process.env.NODE_ENV || 'development',
-    PORT: process.env.PORT || 5000,
+    PORT: process.env.PORT,
     API_VERSION: process.env.API_VERSION || 'v1',
     
     // Database
@@ -33,10 +33,10 @@ export const config = {
     
     // Arvan Object Storage (New)
     ARVAN_OBJECT_STORAGE_API_KEY: process.env.ARVAN_OBJECT_STORAGE_API_KEY,
-    ARVAN_OBJECT_STORAGE_ACCESS_KEY: process.env.ARVAN_OBJECT_STORAGE_ACCESS_KEY || process.env.ARVAN_DRIVE_ACCESS_KEY,
-    ARVAN_OBJECT_STORAGE_SECRET_KEY: process.env.ARVAN_OBJECT_STORAGE_SECRET_KEY || process.env.ARVAN_DRIVE_SECRET_KEY,
-    ARVAN_OBJECT_STORAGE_BUCKET: process.env.ARVAN_OBJECT_STORAGE_BUCKET || process.env.ARVAN_DRIVE_BUCKET,
-    ARVAN_OBJECT_STORAGE_REGION: process.env.ARVAN_OBJECT_STORAGE_REGION || process.env.ARVAN_DRIVE_REGION || 'ir-thr-at1',
+    ARVAN_OBJECT_STORAGE_ACCESS_KEY: process.env.ARVAN_OBJECT_STORAGE_ACCESS_KEY,
+    ARVAN_OBJECT_STORAGE_SECRET_KEY: process.env.ARVAN_OBJECT_STORAGE_SECRET_KEY,
+    ARVAN_OBJECT_STORAGE_BUCKET: process.env.ARVAN_OBJECT_STORAGE_BUCKET,
+    ARVAN_OBJECT_STORAGE_REGION: process.env.ARVAN_OBJECT_STORAGE_REGION,
     
     // Security
     BCRYPT_SALT_ROUNDS: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12,

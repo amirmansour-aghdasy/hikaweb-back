@@ -9,7 +9,7 @@ const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: {
       type: String,
-      required: true
+      required: false // Will be auto-generated in pre-save hook
     },
 
     subject: {
@@ -47,6 +47,11 @@ const ticketSchema = new mongoose.Schema(
       type: String,
       enum: ['technical', 'billing', 'general', 'sales'],
       default: 'general'
+    },
+
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category'
     },
 
     assignedTo: {

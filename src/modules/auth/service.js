@@ -327,17 +327,151 @@ export class AuthService {
     }
   }
 
-  /**
-   * Request OTP for dashboard login via SMS
-   * User must have phoneNumber and be an admin role
-   */
-  static async requestOTPForDashboard(email) {
+  static async updateProfile(userId, profileData) {
     try {
-      // Find user by email and check if they have dashboard access
-      const user = await User.findOne({ email, deletedAt: null }).populate('role');
+      const user = await User.findById(userId);
+
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Update allowed fields
+      if (profileData.name !== undefined) {
+        user.name = profileData.name;
+      }
+      if (profileData.phoneNumber !== undefined) {
+        user.phoneNumber = profileData.phoneNumber || null;
+      }
+      if (profileData.avatar !== undefined) {
+        user.avatar = profileData.avatar || null;
+      }
+      if (profileData.language !== undefined) {
+        user.language = profileData.language;
+      }
+
+      await user.save();
+      await user.populate('role');
+
+      logger.info(`Profile updated for user ${user.email}`);
+      return user;
+    } catch (error) {
+      logger.error('Update profile error:', error);
+      throw error;
+    }
+  }
+
+  static async getSessions(userId, currentRefreshToken = null) {
+    try {
+      const user = await User.findById(userId).select('+refreshTokens');
+
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Filter out expired tokens and return session info
+      const sessions = user.refreshTokens
+        .filter(rt => rt.expiresAt > new Date())
+        .map((rt, index) => ({
+          id: rt._id?.toString() || index.toString(),
+          createdAt: rt.createdAt,
+          expiresAt: rt.expiresAt,
+          isCurrent: currentRefreshToken ? rt.token === currentRefreshToken : false,
+        }));
+
+      return sessions;
+    } catch (error) {
+      logger.error('Get sessions error:', error);
+      throw error;
+    }
+  }
+
+  static async revokeSession(userId, sessionId, currentRefreshToken = null) {
+    try {
+      const user = await User.findById(userId).select('+refreshTokens');
+
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Check if we're revoking the current session
+      const sessionToRevoke = user.refreshTokens.find(
+        rt => rt._id?.toString() === sessionId
+      );
+      
+      const isCurrentSession = currentRefreshToken && sessionToRevoke && sessionToRevoke.token === currentRefreshToken;
+
+      // Remove the session
+      user.refreshTokens = user.refreshTokens.filter(
+        rt => rt._id?.toString() !== sessionId
+      );
+
+      await user.save();
+
+      logger.info(`Session revoked for user ${user.email}`);
+      return { revoked: true, isCurrentSession };
+    } catch (error) {
+      logger.error('Revoke session error:', error);
+      throw error;
+    }
+  }
+
+  static async revokeAllSessions(userId, currentRefreshToken = null) {
+    try {
+      const user = await User.findById(userId).select('+refreshTokens');
+
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Check if current session will be revoked
+      const isCurrentSessionRevoked = currentRefreshToken && 
+        user.refreshTokens.some(rt => rt.token === currentRefreshToken);
+
+      // Clear all refresh tokens
+      user.refreshTokens = [];
+      await user.save();
+
+      logger.info(`All sessions revoked for user ${user.email}`);
+      return { revoked: true, isCurrentSessionRevoked };
+    } catch (error) {
+      logger.error('Revoke all sessions error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Request OTP for dashboard login via SMS or Email
+   * User must have phoneNumber or email and be an admin role
+   * @param {string} emailOrPhone - Email or phone number
+   */
+  static async requestOTPForDashboard(emailOrPhone) {
+    try {
+      // Determine if input is email or phone number
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailOrPhone);
+      const isPhoneNumber = /^(\+98|0)?9\d{9}$/.test(emailOrPhone);
+
+      if (!isEmail && !isPhoneNumber) {
+        throw new Error('لطفاً ایمیل یا شماره موبایل معتبر وارد کنید');
+      }
+
+      // Normalize phone number (remove +98 or 0 prefix)
+      let normalizedPhone = null;
+      if (isPhoneNumber) {
+        normalizedPhone = emailOrPhone.replace(/^(\+98|0)/, '');
+        if (!normalizedPhone.startsWith('9')) {
+          normalizedPhone = '9' + normalizedPhone;
+        }
+      }
+
+      // Find user by email or phoneNumber
+      const query = isEmail 
+        ? { email: emailOrPhone.toLowerCase().trim(), deletedAt: null }
+        : { phoneNumber: normalizedPhone, deletedAt: null };
+      
+      const user = await User.findOne(query).populate('role');
       
       if (!user) {
-        throw new Error('کاربری با این ایمیل یافت نشد');
+        throw new Error('کاربری با این اطلاعات یافت نشد');
       }
 
       // Check if user has dashboard access
@@ -348,36 +482,63 @@ export class AuthService {
         throw new Error('شما دسترسی به پنل مدیریت ندارید');
       }
 
-      // Check if user has phoneNumber
-      if (!user.phoneNumber) {
-        throw new Error('شماره موبایل ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید');
-      }
-
       // Generate OTP
       const otp = crypto.randomInt(100000, 999999).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-      // Store in Redis with email as key (for dashboard)
+      // Use email or phoneNumber as key for Redis
+      const redisKey = isEmail ? `otp:dashboard:${emailOrPhone.toLowerCase().trim()}` : `otp:dashboard:${normalizedPhone}`;
+      
+      // Store in Redis
       const redis = redisClient.getClient();
       await redis.setEx(
-        `otp:dashboard:${email}`,
+        redisKey,
         300,
         JSON.stringify({
           otp,
           expiresAt,
-          attempts: 0
+          attempts: 0,
+          identifier: isEmail ? user.email : user.phoneNumber
         })
       );
 
-      // Send SMS
-      await smsService.sendOTP(user.phoneNumber, otp);
-
-      logger.info(`Dashboard OTP sent to ${email} (${user.phoneNumber})`);
-
-      return {
-        message: 'کد تایید به شماره موبایل شما ارسال شد',
-        expiresIn: 300
-      };
+      // Send OTP via SMS or Email
+      if (isPhoneNumber) {
+        // Send SMS
+        if (!user.phoneNumber) {
+          throw new Error('شماره موبایل ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید');
+        }
+        await smsService.sendOTP(user.phoneNumber, otp);
+        logger.info(`Dashboard OTP sent via SMS to ${user.phoneNumber}`);
+        
+        return {
+          message: 'کد تایید به شماره موبایل شما ارسال شد',
+          expiresIn: 300
+        };
+      } else {
+        // Send Email
+        if (!user.email) {
+          throw new Error('ایمیل ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید');
+        }
+        
+        // Import email service dynamically
+        try {
+          const { emailService } = await import('../../utils/email.js');
+          await emailService.sendOTP(user.email, otp);
+          logger.info(`Dashboard OTP sent via Email to ${user.email}`);
+        } catch (error) {
+          logger.error('Failed to send email OTP:', error);
+          // Fallback: log OTP in development
+          if (process.env.NODE_ENV === 'development') {
+            logger.info(`[DEV] OTP for ${user.email}: ${otp}`);
+          }
+        }
+        
+        return {
+          message: 'کد تایید به ایمیل شما ارسال شد',
+          expiresIn: 300
+        };
+      }
     } catch (error) {
       logger.error('Dashboard OTP request error:', error);
       throw error;
@@ -386,46 +547,73 @@ export class AuthService {
 
   /**
    * Verify OTP for dashboard login
+   * @param {string} emailOrPhone - Email or phone number
+   * @param {string} otp - OTP code
    */
-  static async verifyOTPForDashboard(email, otp) {
+  static async verifyOTPForDashboard(emailOrPhone, otp) {
     try {
+      // Determine if input is email or phone number
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailOrPhone);
+      const isPhoneNumber = /^(\+98|0)?9\d{9}$/.test(emailOrPhone);
+
+      if (!isEmail && !isPhoneNumber) {
+        throw new Error('لطفاً ایمیل یا شماره موبایل معتبر وارد کنید');
+      }
+
+      // Normalize phone number (remove +98 or 0 prefix)
+      let normalizedPhone = null;
+      if (isPhoneNumber) {
+        normalizedPhone = emailOrPhone.replace(/^(\+98|0)/, '');
+        if (!normalizedPhone.startsWith('9')) {
+          normalizedPhone = '9' + normalizedPhone;
+        }
+      }
+
+      // Use email or phoneNumber as key for Redis
+      const redisKey = isEmail ? `otp:dashboard:${emailOrPhone.toLowerCase().trim()}` : `otp:dashboard:${normalizedPhone}`;
+      
       const redis = redisClient.getClient();
-      const otpData = await redis.get(`otp:dashboard:${email}`);
+      const otpData = await redis.get(redisKey);
 
       if (!otpData) {
         throw new Error('کد تایید منقضی شده یا یافت نشد');
       }
 
-      const { otp: storedOTP, expiresAt, attempts } = JSON.parse(otpData);
+      const { otp: storedOTP, expiresAt, attempts, identifier } = JSON.parse(otpData);
 
       if (attempts >= 3) {
-        await redis.del(`otp:dashboard:${email}`);
+        await redis.del(redisKey);
         throw new Error('تلاش‌های زیادی انجام شده است. لطفاً دوباره درخواست دهید');
       }
 
       if (new Date() > new Date(expiresAt)) {
-        await redis.del(`otp:dashboard:${email}`);
+        await redis.del(redisKey);
         throw new Error('کد تایید منقضی شده است');
       }
 
       if (otp !== storedOTP) {
         await redis.setEx(
-          `otp:dashboard:${email}`,
+          redisKey,
           300,
           JSON.stringify({
             otp: storedOTP,
             expiresAt,
-            attempts: attempts + 1
+            attempts: attempts + 1,
+            identifier
           })
         );
         throw new Error('کد تایید نادرست است');
       }
 
       // Clean up
-      await redis.del(`otp:dashboard:${email}`);
+      await redis.del(redisKey);
 
-      // Find user
-      const user = await User.findOne({ email, deletedAt: null }).populate('role');
+      // Find user by identifier (email or phoneNumber)
+      const query = isEmail 
+        ? { email: emailOrPhone.toLowerCase().trim(), deletedAt: null }
+        : { phoneNumber: normalizedPhone, deletedAt: null };
+      
+      const user = await User.findOne(query).populate('role');
       
       if (!user) {
         throw new Error('کاربر یافت نشد');

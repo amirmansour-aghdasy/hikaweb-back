@@ -151,8 +151,8 @@ export class FAQController {
   static async getFAQById(req, res, next) {
     try {
       const faq = await FAQ.findById(req.params.id)
-        .populate('serviceId', 'name slug')
-        .populate('categoryIds', 'name slug');
+        .populate('service', 'name slug')
+        .populate('category', 'name slug');
 
       if (!faq || faq.deletedAt) {
         return res.status(404).json({

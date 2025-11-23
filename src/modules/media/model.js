@@ -80,6 +80,12 @@ const mediaSchema = new mongoose.Schema(
       required: true
     },
 
+    bucket: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Bucket',
+      required: true
+    },
+
     folder: {
       type: String,
       default: '/',
@@ -136,7 +142,9 @@ const mediaSchema = new mongoose.Schema(
 mediaSchema.index({ uploadedBy: 1 });
 mediaSchema.index({ fileType: 1 });
 mediaSchema.index({ mimeType: 1 });
+mediaSchema.index({ bucket: 1 });
 mediaSchema.index({ folder: 1 });
+mediaSchema.index({ bucket: 1, folder: 1 });
 mediaSchema.index({ createdAt: -1 });
 mediaSchema.index({ usageCount: -1 });
 mediaSchema.index({ originalName: 'text', 'title.fa': 'text', 'title.en': 'text' });

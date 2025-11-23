@@ -28,7 +28,8 @@ export class NotificationService {
         limit = 25,
         page = 1,
         isRead = null,
-        type = null
+        type = null,
+        search = null
       } = options;
 
       const query = { recipient: userId, deletedAt: null };
@@ -39,6 +40,16 @@ export class NotificationService {
       
       if (type) {
         query.type = type;
+      }
+
+      if (search) {
+        query.$or = [
+          { 'title.fa': { $regex: search, $options: 'i' } },
+          { 'title.en': { $regex: search, $options: 'i' } },
+          { 'message.fa': { $regex: search, $options: 'i' } },
+          { 'message.en': { $regex: search, $options: 'i' } },
+          { type: { $regex: search, $options: 'i' } }
+        ];
       }
 
       const skip = (page - 1) * limit;

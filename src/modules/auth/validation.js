@@ -124,11 +124,18 @@ export const dashboardOTPRequestSchema = Joi.object({
     .email()
     .lowercase()
     .trim()
-    .required()
+    .optional()
     .messages({
-      'string.email': 'فرمت ایمیل صحیح نیست',
-      'any.required': 'ایمیل الزامی است'
+      'string.email': 'فرمت ایمیل صحیح نیست'
+    }),
+  phoneNumber: Joi.string()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .optional()
+    .messages({
+      'string.pattern.base': 'شماره موبایل صحیح نیست'
     })
+}).or('email', 'phoneNumber').messages({
+  'object.missing': 'ایمیل یا شماره موبایل الزامی است'
 });
 
 export const dashboardOTPVerifySchema = Joi.object({
@@ -136,7 +143,13 @@ export const dashboardOTPVerifySchema = Joi.object({
     .email()
     .lowercase()
     .trim()
-    .required(),
+    .optional(),
+  phoneNumber: Joi.string()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .optional()
+    .messages({
+      'string.pattern.base': 'شماره موبایل صحیح نیست'
+    }),
   otp: Joi.string()
     .length(6)
     .pattern(/^\d+$/)
@@ -146,6 +159,8 @@ export const dashboardOTPVerifySchema = Joi.object({
       'string.pattern.base': 'کد تایید باید عددی باشد',
       'any.required': 'کد تایید الزامی است'
     })
+}).or('email', 'phoneNumber').messages({
+  'object.missing': 'ایمیل یا شماره موبایل الزامی است'
 });
 
 export const passwordResetRequestSchema = Joi.object({
@@ -176,4 +191,36 @@ export const passwordResetSchema = Joi.object({
       'string.pattern.base': 'رمز عبور جدید باید شامل حروف کوچک، بزرگ و عدد باشد',
       'any.required': 'رمز عبور جدید الزامی است'
     })
+});
+
+export const updateProfileSchema = Joi.object({
+  name: Joi.string()
+    .trim()
+    .min(2)
+    .max(100)
+    .optional()
+    .messages({
+      'string.min': 'نام باید حداقل ۲ کاراکتر باشد',
+      'string.max': 'نام نمی‌تواند بیشتر از ۱۰۰ کاراکتر باشد'
+    }),
+
+  phoneNumber: Joi.string()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .allow(null, '')
+    .optional()
+    .messages({
+      'string.pattern.base': 'شماره موبایل صحیح نیست'
+    }),
+
+  avatar: Joi.string()
+    .uri()
+    .allow(null, '')
+    .optional()
+    .messages({
+      'string.uri': 'آدرس تصویر پروفایل صحیح نیست'
+    }),
+
+  language: Joi.string()
+    .valid('fa', 'en')
+    .optional()
 });

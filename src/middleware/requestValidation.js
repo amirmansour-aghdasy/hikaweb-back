@@ -19,13 +19,18 @@ export const requestValidation = (req, res, next) => {
     // Validate Content-Type for POST/PUT/PATCH requests
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
       const contentType = req.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        // Allow multipart/form-data for file uploads
-        if (!contentType || !contentType.includes('multipart/form-data')) {
-          return res.status(400).json({
-            success: false,
-            message: 'Content-Type باید application/json باشد'
-          });
+      // Allow requests without body (empty body) - some endpoints don't need body
+      const hasBody = req.get('content-length') && parseInt(req.get('content-length')) > 0;
+      
+      if (hasBody) {
+        if (!contentType || !contentType.includes('application/json')) {
+          // Allow multipart/form-data for file uploads
+          if (!contentType || !contentType.includes('multipart/form-data')) {
+            return res.status(400).json({
+              success: false,
+              message: 'Content-Type باید application/json باشد'
+            });
+          }
         }
       }
     }

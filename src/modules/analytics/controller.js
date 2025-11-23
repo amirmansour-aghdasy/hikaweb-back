@@ -77,5 +77,31 @@ export class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * @swagger
+   * /api/v1/analytics/comprehensive-stats:
+   *   get:
+   *     summary: دریافت آمار جامع همه ماژول‌ها
+   *     tags: [Analytics]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: آمار جامع دریافت شد
+   */
+  static async getComprehensiveStats(req, res, next) {
+    try {
+      const userRole = req.user.role?.name || req.user.role;
+      const stats = await AnalyticsService.getComprehensiveStats(req.user.id, userRole);
+
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 

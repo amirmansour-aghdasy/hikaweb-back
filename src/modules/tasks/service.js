@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Task } from './model.js';
 import { User } from '../auth/model.js';
 import { Notification } from '../notifications/model.js';
@@ -237,15 +238,19 @@ export class TaskService {
       await task.populate('assignee', 'name email phoneNumber');
       await task.populate('assigner', 'name email');
 
-      // Create notification if status changed
-      if (updateData.status && updateData.status !== oldStatus) {
-        const statusMessages = {
-          in_progress: { fa: 'در حال انجام', en: 'In Progress' },
-          completed: { fa: 'تکمیل شد', en: 'Completed' },
-          cancelled: { fa: 'لغو شد', en: 'Cancelled' }
-        };
+      // Create notification if task was updated (only notify assignee, not the person who updated)
+      // Don't notify if assignee is the one who updated
+      const shouldNotify = task.assignee._id.toString() !== userId && task.notifications.dashboard;
+      
+      if (shouldNotify) {
+        // Check if status changed
+        if (updateData.status && updateData.status !== oldStatus) {
+          const statusMessages = {
+            in_progress: { fa: 'در حال انجام', en: 'In Progress' },
+            completed: { fa: 'تکمیل شد', en: 'Completed' },
+            cancelled: { fa: 'لغو شد', en: 'Cancelled' }
+          };
 
-        if (task.notifications.dashboard) {
           await Notification.create({
             type: 'task_updated',
             title: {
@@ -255,6 +260,26 @@ export class TaskService {
             message: {
               fa: `وضعیت وظیفه "${task.title}" به "${statusMessages[updateData.status]?.fa || updateData.status}" تغییر کرد`,
               en: `Task "${task.title}" status changed to "${statusMessages[updateData.status]?.en || updateData.status}"`
+            },
+            recipient: task.assignee._id,
+            relatedEntity: {
+              type: 'other',
+              id: task._id
+            },
+            priority: task.priority,
+            actionUrl: `/dashboard/tasks/${task._id}`
+          });
+        } else {
+          // Task was updated but status didn't change (other fields were updated)
+          await Notification.create({
+            type: 'task_updated',
+            title: {
+              fa: 'وظیفه ویرایش شد',
+              en: 'Task Updated'
+            },
+            message: {
+              fa: `وظیفه "${task.title}" ویرایش شد`,
+              en: `Task "${task.title}" has been updated`
             },
             recipient: task.assignee._id,
             relatedEntity: {
@@ -309,6 +334,17 @@ export class TaskService {
           throw new Error('شما دسترسی به حذف این وظیفه ندارید');
         }
       }
+
+      // Delete related notifications before deleting task
+      await Notification.updateMany(
+        {
+          'relatedEntity.type': 'other',
+          'relatedEntity.id': new mongoose.Types.ObjectId(taskId),
+          type: { $in: ['task_assigned', 'task_updated'] },
+          deletedAt: null
+        },
+        { deletedAt: new Date() }
+      );
 
       await Task.findByIdAndDelete(taskId);
 

@@ -43,6 +43,21 @@ export const auditLog = (action, resource) => {
             default:
               logAction = 'READ';
           }
+        } else {
+          // Normalize action names to match enum values
+          // Convert CREATE_TICKET, CREATE_BRAND, etc. to CREATE
+          if (logAction.startsWith('CREATE_')) {
+            logAction = 'CREATE';
+          } else if (logAction.startsWith('UPDATE_')) {
+            logAction = 'UPDATE';
+          } else if (logAction.startsWith('DELETE_')) {
+            logAction = 'DELETE';
+          } else if (logAction.startsWith('READ_')) {
+            logAction = 'READ';
+          } else if (logAction === 'UPLOAD_MEDIA' || logAction === 'BULK_UPLOAD_MEDIA') {
+            logAction = 'FILE_UPLOAD';
+          }
+          // Keep other actions as-is (LOGIN, LOGOUT, etc.)
         }
 
         // Extract changes from request body if available

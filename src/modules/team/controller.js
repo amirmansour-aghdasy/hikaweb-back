@@ -20,6 +20,8 @@ export class TeamController {
    *               - name
    *               - slug
    *               - position
+   *               - avatar
+   *               - department
    *             properties:
    *               name:
    *                 $ref: '#/components/schemas/MultiLanguageText'
@@ -31,6 +33,9 @@ export class TeamController {
    *                 $ref: '#/components/schemas/MultiLanguageText'
    *               avatar:
    *                 type: string
+   *               department:
+   *                 type: string
+   *                 enum: [management, development, design, marketing, sales, support]
    *               email:
    *                 type: string
    *               phone:

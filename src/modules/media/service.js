@@ -3,6 +3,7 @@ import path from 'path';
 import multer from 'multer';
 
 import { Media } from './model.js';
+import { Bucket } from './bucketModel.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/environment.js';
 import { FileProcessor } from '../../utils/fileProcessor.js';
@@ -45,10 +46,39 @@ export class MediaService {
 
   static async uploadFile(file, user, metadata = {}) {
     try {
+      // Get or create bucket
+      let bucket;
+      if (metadata.bucketId) {
+        bucket = await Bucket.findById(metadata.bucketId);
+        if (!bucket) {
+          throw new Error('Bucket یافت نشد');
+        }
+      } else {
+        // Use default bucket or create one
+        bucket = await Bucket.findOne({ name: 'default' });
+        if (!bucket) {
+          bucket = await this.createBucket({
+            name: 'default',
+            displayName: 'پیش‌فرض',
+            region: 'ir-thr-at1',
+            isPublic: true, // Default bucket should be public for media files
+            createdBy: user.id
+          });
+        } else {
+          // Ensure default bucket is public
+          if (bucket.isPublic === false) {
+            bucket.isPublic = true;
+            await bucket.save();
+          }
+        }
+      }
+
       const fileType = FileProcessor.getFileTypeCategory(file.mimetype);
       const uniqueFilename = FileProcessor.generateUniqueFilename(file.originalname);
       const folder = metadata.folder || '/';
-      const key = `${folder}${uniqueFilename}`.replace('//', '/');
+      // Remove leading slash from folder and ensure key doesn't start with /
+      const cleanFolder = folder.replace(/^\/+/, '').replace(/\/+$/, '');
+      const key = cleanFolder ? `${cleanFolder}/${uniqueFilename}` : uniqueFilename;
 
       let dimensions = null;
       let variants = [];
@@ -62,19 +92,33 @@ export class MediaService {
         };
 
         // Upload original
-        const originalUrl = await arvanObjectStorageService.uploadFile(file.buffer, key, file.mimetype, {
-          type: 'original',
-          isPublic: true
-        });
+        // Use actual Arvan bucket name from config, not MongoDB bucket name
+        const arvanBucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
+        const arvanRegion = bucket.region || config.ARVAN_OBJECT_STORAGE_REGION || config.ARVAN_DRIVE_REGION || 'ir-thr-at1';
+        
+        const originalUrl = await arvanObjectStorageService.uploadFile(
+          file.buffer, 
+          key, 
+          file.mimetype, 
+          {
+            type: 'original',
+            isPublic: bucket.isPublic !== false // Default to true (public-read) unless explicitly set to false
+          },
+          arvanBucketName,
+          arvanRegion
+        );
 
         // Upload variants
         for (const [sizeName, variant] of Object.entries(processed.variants)) {
+          // Ensure variant key doesn't start with / and uses same folder structure
           const variantKey = key.replace(path.extname(key), `-${sizeName}.webp`);
           const variantUrl = await arvanObjectStorageService.uploadFile(
             variant.buffer,
             variantKey,
             'image/webp',
-            { type: 'variant', size: sizeName, isPublic: true }
+            { type: 'variant', size: sizeName, isPublic: bucket.isPublic !== false },
+            arvanBucketName,
+            arvanRegion
           );
 
           variants.push({
@@ -97,18 +141,34 @@ export class MediaService {
           size: file.size,
           dimensions,
           uploadedBy: user.id,
+          bucket: bucket._id,
           folder,
           variants,
           ...metadata
         });
 
         await mediaRecord.save();
+        
+        // Update bucket statistics
+        await bucket.updateStatistics();
+        
         return mediaRecord;
       } else {
         // Handle non-image files
-        const uploadResult = await arvanObjectStorageService.uploadFile(file.buffer, key, file.mimetype, {
-          isPublic: true
-        });
+        // Use actual Arvan bucket name from config, not MongoDB bucket name
+        const arvanBucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
+        const arvanRegion = bucket.region || config.ARVAN_OBJECT_STORAGE_REGION || config.ARVAN_DRIVE_REGION || 'ir-thr-at1';
+        
+        const uploadResult = await arvanObjectStorageService.uploadFile(
+          file.buffer, 
+          key, 
+          file.mimetype, 
+          {
+            isPublic: bucket.isPublic !== false // Default to true (public-read) unless explicitly set to false
+          },
+          arvanBucketName,
+          arvanRegion
+        );
 
         const mediaRecord = new Media({
           filename: uniqueFilename,
@@ -118,11 +178,16 @@ export class MediaService {
           fileType,
           size: file.size,
           uploadedBy: user.id,
+          bucket: bucket._id,
           folder,
           ...metadata
         });
 
         await mediaRecord.save();
+        
+        // Update bucket statistics
+        await bucket.updateStatistics();
+        
         return mediaRecord;
       }
     } catch (error) {
@@ -133,7 +198,7 @@ export class MediaService {
 
   static async deleteFile(mediaId, user) {
     try {
-      const media = await Media.findById(mediaId);
+      const media = await Media.findById(mediaId).populate('bucket');
 
       if (!media) {
         throw new Error('رسانه یافت نشد');
@@ -147,25 +212,33 @@ export class MediaService {
       // URL format: https://s3.ir-thr-at1.arvanstorage.ir/bucket-name/path/to/file.jpg
       const url = new URL(media.url);
       const pathParts = url.pathname.split('/').filter(p => p);
-      // Remove bucket name (first part) and get the rest as key
-      const bucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
-      const bucketIndex = pathParts.findIndex(p => p === bucketName);
+      // Use actual Arvan bucket name from config, not MongoDB bucket name
+      const arvanBucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
+      const arvanRegion = media.bucket?.region || config.ARVAN_OBJECT_STORAGE_REGION || config.ARVAN_DRIVE_REGION || 'ir-thr-at1';
+      
+      // Try to find bucket name in URL path, otherwise use config bucket name
+      const bucketIndex = pathParts.findIndex(p => p === arvanBucketName);
       const key = bucketIndex >= 0 ? pathParts.slice(bucketIndex + 1).join('/') : pathParts.join('/');
 
-      await arvanObjectStorageService.deleteFile(key);
+      await arvanObjectStorageService.deleteFile(key, arvanBucketName, arvanRegion);
 
       // Delete variants
       if (media.variants && media.variants.length > 0) {
         for (const variant of media.variants) {
           const variantUrl = new URL(variant.url);
           const variantPathParts = variantUrl.pathname.split('/').filter(p => p);
-          const variantBucketIndex = variantPathParts.findIndex(p => p === bucketName);
+          const variantBucketIndex = variantPathParts.findIndex(p => p === arvanBucketName);
           const variantKey = variantBucketIndex >= 0 ? variantPathParts.slice(variantBucketIndex + 1).join('/') : variantPathParts.join('/');
-          await arvanObjectStorageService.deleteFile(variantKey);
+          await arvanObjectStorageService.deleteFile(variantKey, arvanBucketName, arvanRegion);
         }
       }
 
       await Media.findByIdAndDelete(mediaId);
+
+      // Update bucket statistics
+      if (media.bucket) {
+        await media.bucket.updateStatistics();
+      }
 
       logger.info(`Media deleted: ${media.originalName} by ${user.email}`);
       return true;
@@ -182,6 +255,7 @@ export class MediaService {
         limit = 25,
         search = '',
         fileType = '',
+        bucket = '',
         folder = '',
         uploadedBy = ''
       } = filters;
@@ -200,6 +274,7 @@ export class MediaService {
       }
 
       if (fileType) query.fileType = fileType;
+      if (bucket) query.bucket = bucket;
       if (folder) query.folder = folder;
       if (uploadedBy) query.uploadedBy = uploadedBy;
 
@@ -208,6 +283,11 @@ export class MediaService {
       const [media, total] = await Promise.all([
         Media.find(query)
           .populate('uploadedBy', 'name email')
+          .populate({
+            path: 'bucket',
+            select: 'name displayName region',
+            strictPopulate: false // Allow null if bucket doesn't exist
+          })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(parsedLimit),
@@ -231,22 +311,209 @@ export class MediaService {
     }
   }
 
-  static async createFolder(folderPath, user) {
+  static async createFolder(folderPath, bucketId, user) {
     try {
+      const bucket = await Bucket.findById(bucketId);
+      if (!bucket) {
+        throw new Error('Bucket یافت نشد');
+      }
+
       const normalizedPath = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
 
       // Create empty file to represent folder
       const key = `${normalizedPath}/.gitkeep`;
-      await arvanObjectStorageService.uploadFile(Buffer.from(''), key, 'text/plain', {
-        type: 'folder',
-        createdBy: user.id,
-        isPublic: false
-      });
+      await arvanObjectStorageService.uploadFile(
+        Buffer.from(''), 
+        key, 
+        'text/plain', 
+        {
+          type: 'folder',
+          createdBy: user.id,
+          isPublic: false
+        },
+        bucket.name,
+        bucket.region
+      );
 
-      logger.info(`Folder created: ${normalizedPath} by ${user.email}`);
+      logger.info(`Folder created: ${normalizedPath} in bucket ${bucket.name} by ${user.email}`);
       return true;
     } catch (error) {
       logger.error('Folder creation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new bucket
+   */
+  static async createBucket(bucketData) {
+    try {
+      const { name, displayName, description, region, isPublic, versioningEnabled, createdBy } = bucketData;
+
+      // Check if bucket with same name exists
+      const existingBucket = await Bucket.findOne({ name });
+      if (existingBucket) {
+        throw new Error('Bucket با این نام قبلاً وجود دارد');
+      }
+
+      // Create bucket in Arvan
+      await arvanObjectStorageService.createBucket(name, {
+        region: region || 'ir-thr-at1',
+        isPublic: isPublic || false,
+        versioningEnabled: versioningEnabled || false
+      });
+
+      // Create bucket record in database
+      const bucket = new Bucket({
+        name,
+        displayName,
+        description,
+        region: region || 'ir-thr-at1',
+        isPublic: isPublic || false,
+        versioningEnabled: versioningEnabled || false,
+        createdBy
+      });
+
+      await bucket.save();
+
+      logger.info(`Bucket created: ${name} by user ${createdBy}`);
+      return bucket;
+    } catch (error) {
+      logger.error('Bucket creation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all buckets
+   */
+  static async getBuckets(filters = {}) {
+    try {
+      const { page = 1, limit = 50, search = '' } = filters;
+      const parsedPage = parseInt(page) || 1;
+      const parsedLimit = parseInt(limit) || 50;
+
+      let query = { deletedAt: null };
+
+      if (search) {
+        query.$or = [
+          { name: new RegExp(search, 'i') },
+          { displayName: new RegExp(search, 'i') },
+          { description: new RegExp(search, 'i') }
+        ];
+      }
+
+      const skip = (parsedPage - 1) * parsedLimit;
+
+      const [buckets, total] = await Promise.all([
+        Bucket.find(query)
+          .populate('createdBy', 'name email')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parsedLimit),
+        Bucket.countDocuments(query)
+      ]);
+
+      // Update statistics for each bucket
+      for (const bucket of buckets) {
+        await bucket.updateStatistics();
+      }
+
+      return {
+        data: buckets,
+        pagination: {
+          page: parsedPage,
+          limit: parsedLimit,
+          total,
+          totalPages: Math.ceil(total / parsedLimit),
+          hasNext: parsedPage < Math.ceil(total / parsedLimit),
+          hasPrev: parsedPage > 1
+        }
+      };
+    } catch (error) {
+      logger.error('Get buckets error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get bucket by ID
+   */
+  static async getBucketById(bucketId) {
+    try {
+      const bucket = await Bucket.findById(bucketId)
+        .populate('createdBy', 'name email');
+
+      if (!bucket) {
+        throw new Error('Bucket یافت نشد');
+      }
+
+      // Update statistics
+      await bucket.updateStatistics();
+
+      return bucket;
+    } catch (error) {
+      logger.error('Get bucket error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get folders in a bucket
+   */
+  static async getFolders(bucketId, parentFolder = '/') {
+    try {
+      const bucket = await Bucket.findById(bucketId);
+      if (!bucket) {
+        throw new Error('Bucket یافت نشد');
+      }
+
+      // Get folders from media records
+      const folders = await Media.distinct('folder', {
+        bucket: bucketId,
+        deletedAt: null,
+        folder: { $regex: `^${parentFolder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` }
+      });
+
+      // Also get folders from S3
+      const s3Folders = await arvanObjectStorageService.listObjects(bucket.name, parentFolder, bucket.region);
+
+      // Combine and deduplicate
+      const allFolders = new Set([
+        ...folders,
+        ...s3Folders.folders
+      ]);
+
+      return Array.from(allFolders).filter(f => f !== parentFolder && f.startsWith(parentFolder));
+    } catch (error) {
+      logger.error('Get folders error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete bucket
+   */
+  static async deleteBucket(bucketId, user) {
+    try {
+      const bucket = await Bucket.findById(bucketId);
+      if (!bucket) {
+        throw new Error('Bucket یافت نشد');
+      }
+
+      // Check if bucket has files
+      const fileCount = await Media.countDocuments({ bucket: bucketId, deletedAt: null });
+      if (fileCount > 0) {
+        throw new Error('Bucket دارای فایل است و قابل حذف نیست');
+      }
+
+      // Soft delete
+      await bucket.softDelete(user.id);
+
+      logger.info(`Bucket deleted: ${bucket.name} by ${user.email}`);
+      return true;
+    } catch (error) {
+      logger.error('Bucket deletion error:', error);
       throw error;
     }
   }

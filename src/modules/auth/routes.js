@@ -12,6 +12,7 @@ import {
   otpVerifySchema,
   refreshTokenSchema,
   changePasswordSchema,
+  updateProfileSchema,
   googleAuthSchema,
   dashboardOTPRequestSchema,
   dashboardOTPVerifySchema,
@@ -128,6 +129,35 @@ router.put('/change-password',
   validate(changePasswordSchema),
   auditLog('CHANGE_PASSWORD', 'users'),
   AuthController.changePassword
+);
+
+router.put('/profile',
+  requireDashboardAccess,
+  validate(updateProfileSchema),
+  auditLog('UPDATE_PROFILE', 'users'),
+  AuthController.updateProfile
+);
+
+router.get('/sessions',
+  requireDashboardAccess,
+  AuthController.getSessions
+);
+
+router.delete('/sessions/:id',
+  requireDashboardAccess,
+  auditLog('REVOKE_SESSION', 'users'),
+  AuthController.revokeSession
+);
+
+router.delete('/sessions',
+  requireDashboardAccess,
+  auditLog('REVOKE_ALL_SESSIONS', 'users'),
+  AuthController.revokeAllSessions
+);
+
+router.get('/activity',
+  requireDashboardAccess,
+  AuthController.getActivityHistory
 );
 
 // WebAuthn protected routes (registration and management)

@@ -34,13 +34,14 @@ export class NotificationController {
    */
   static async getNotifications(req, res, next) {
     try {
-      const { page = 1, limit = 25, isRead, type } = req.query;
+      const { page = 1, limit = 25, isRead, type, search } = req.query;
       
       const result = await NotificationService.getUserNotifications(req.user.id, {
         page: parseInt(page),
         limit: parseInt(limit),
         isRead: isRead === 'true' ? true : isRead === 'false' ? false : null,
-        type
+        type,
+        search
       });
 
       res.json({

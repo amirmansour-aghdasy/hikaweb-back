@@ -6,6 +6,9 @@ import { Comment } from '../comments/model.js';
 import { Consultation } from '../consultations/model.js';
 import { Ticket } from '../tickets/model.js';
 import { User } from '../auth/model.js';
+import { TaskService } from '../tasks/service.js';
+import { CalendarService } from '../calendar/service.js';
+import { MediaService } from '../media/service.js';
 import { logger } from '../../utils/logger.js';
 
 export class AnalyticsService {
@@ -310,6 +313,117 @@ export class AnalyticsService {
         return { $dateToString: { format: '%Y-%m', date: '$date' } }; // Month
       default:
         return { $dateToString: { format: '%Y-%m-%d', date: '$date' } };
+    }
+  }
+
+  /**
+   * Get comprehensive statistics for all modules
+   */
+  static async getComprehensiveStats(userId = null, userRole = null) {
+    try {
+      // Determine if user is admin (should see all stats)
+      const isAdmin = userRole === 'super_admin' || userRole === 'admin';
+      const statsUserId = isAdmin ? null : userId;
+
+      // Get ticket statistics
+      const ticketStats = await Ticket.aggregate([
+        {
+          $match: { deletedAt: null }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            open: {
+              $sum: {
+                $cond: [{ $eq: ['$ticketStatus', 'open'] }, 1, 0]
+              }
+            },
+            inProgress: {
+              $sum: {
+                $cond: [{ $eq: ['$ticketStatus', 'in_progress'] }, 1, 0]
+              }
+            },
+            resolved: {
+              $sum: {
+                $cond: [{ $eq: ['$ticketStatus', 'resolved'] }, 1, 0]
+              }
+            },
+            closed: {
+              $sum: {
+                $cond: [{ $eq: ['$ticketStatus', 'closed'] }, 1, 0]
+              }
+            }
+          }
+        }
+      ]);
+
+      // Get all statistics in parallel
+      const [
+        dashboardStats,
+        taskStats,
+        calendarStats,
+        mediaStats,
+        ticketStatsResult
+      ] = await Promise.all([
+        this.getDashboardStats('30d'),
+        TaskService.getTaskStatistics(statsUserId),
+        CalendarService.getCalendarStatistics(statsUserId),
+        MediaService.getMediaStatistics(),
+        Promise.resolve(ticketStats[0] || {})
+      ]);
+
+      // Format file size helper
+      const formatFileSize = (bytes) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+      };
+
+      return {
+        overview: {
+          ...dashboardStats.overview,
+          totalTasks: taskStats.total || 0,
+          totalCalendarEvents: calendarStats.total || 0,
+          totalMediaFiles: mediaStats.total || 0,
+          totalTickets: ticketStatsResult.total || 0,
+          pendingTickets: ticketStatsResult.open + ticketStatsResult.inProgress || 0,
+          resolvedTickets: ticketStatsResult.resolved || 0,
+          closedTickets: ticketStatsResult.closed || 0
+        },
+        tasks: {
+          total: taskStats.total || 0,
+          byStatus: taskStats.byStatus || {},
+          byPriority: taskStats.byPriority || {},
+          overdue: taskStats.overdue || 0
+        },
+        calendar: {
+          total: calendarStats.total || 0,
+          byType: calendarStats.byType || {},
+          upcoming: calendarStats.upcoming || 0,
+          past: calendarStats.past || 0
+        },
+        media: {
+          total: mediaStats.total || 0,
+          byFileType: mediaStats.byFileType || {},
+          totalSize: mediaStats.totalSize || 0,
+          totalSizeFormatted: formatFileSize(mediaStats.totalSize || 0)
+        },
+        tickets: {
+          total: ticketStatsResult.total || 0,
+          open: ticketStatsResult.open || 0,
+          inProgress: ticketStatsResult.inProgress || 0,
+          resolved: ticketStatsResult.resolved || 0,
+          closed: ticketStatsResult.closed || 0
+        },
+        recent: dashboardStats.recent,
+        analytics: dashboardStats.analytics
+      };
+    } catch (error) {
+      logger.error('Get comprehensive stats error:', error);
+      throw error;
     }
   }
 }

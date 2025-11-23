@@ -48,6 +48,7 @@ export class MediaController {
       }
 
       const metadata = {
+        bucketId: req.body.bucketId || null,
         folder: req.body.folder || '/',
         title: {
           fa: req.body.title_fa || '',
@@ -296,11 +297,150 @@ export class MediaController {
   static async createFolder(req, res, next) {
     try {
       const folderPath = req.body.path || req.body.folder;
-      await MediaService.createFolder(folderPath, req.user);
+      const { bucketId } = req.body;
+      
+      if (!bucketId) {
+        return res.status(400).json({
+          success: false,
+          message: 'شناسه bucket الزامی است'
+        });
+      }
+
+      await MediaService.createFolder(folderPath, bucketId, req.user);
 
       res.json({
         success: true,
-        message: req.t('media.folderCreated')
+        message: req.t('media.folderCreated') || 'پوشه با موفقیت ایجاد شد'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/buckets:
+   *   post:
+   *     summary: ایجاد bucket جدید
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   */
+  static async createBucket(req, res, next) {
+    try {
+      const { name, displayName, description, region, isPublic, versioningEnabled } = req.body;
+
+      if (!name || !displayName) {
+        return res.status(400).json({
+          success: false,
+          message: 'نام و نام نمایشی bucket الزامی است'
+        });
+      }
+
+      const bucket = await MediaService.createBucket({
+        name,
+        displayName,
+        description,
+        region: region || 'ir-thr-at1',
+        isPublic: isPublic || false,
+        versioningEnabled: versioningEnabled || false,
+        createdBy: req.user.id
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Bucket با موفقیت ایجاد شد',
+        data: { bucket }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/buckets:
+   *   get:
+   *     summary: دریافت لیست bucket ها
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   */
+  static async getBuckets(req, res, next) {
+    try {
+      const result = await MediaService.getBuckets(req.query);
+
+      res.json({
+        success: true,
+        data: result.data,
+        pagination: result.pagination
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/buckets/:id:
+   *   get:
+   *     summary: دریافت اطلاعات bucket
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   */
+  static async getBucketById(req, res, next) {
+    try {
+      const bucket = await MediaService.getBucketById(req.params.id);
+
+      res.json({
+        success: true,
+        data: { bucket }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/buckets/:id/folders:
+   *   get:
+   *     summary: دریافت لیست پوشه‌های bucket
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   */
+  static async getFolders(req, res, next) {
+    try {
+      const { parentFolder = '/' } = req.query;
+      const folders = await MediaService.getFolders(req.params.id, parentFolder);
+
+      res.json({
+        success: true,
+        data: { folders }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/media/buckets/:id:
+   *   delete:
+   *     summary: حذف bucket
+   *     tags: [Media]
+   *     security:
+   *       - bearerAuth: []
+   */
+  static async deleteBucket(req, res, next) {
+    try {
+      await MediaService.deleteBucket(req.params.id, req.user);
+
+      res.json({
+        success: true,
+        message: 'Bucket با موفقیت حذف شد'
       });
     } catch (error) {
       next(error);

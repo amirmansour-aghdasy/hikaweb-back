@@ -13,11 +13,11 @@ router.get('/', NotificationController.getNotifications);
 // Get unread count
 router.get('/unread-count', NotificationController.getUnreadCount);
 
+// Mark all as read (must be before /:id routes)
+router.patch('/read-all', NotificationController.markAllAsRead);
+
 // Mark as read
 router.patch('/:id/read', NotificationController.markAsRead);
-
-// Mark all as read
-router.patch('/read-all', NotificationController.markAllAsRead);
 
 // Delete notification
 router.delete('/:id', NotificationController.deleteNotification);

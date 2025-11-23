@@ -311,7 +311,7 @@ export class AuthController {
 
       res.json({
         success: true,
-        data: { user }
+        data: user
       });
     } catch (error) {
       next(error);
@@ -356,6 +356,178 @@ export class AuthController {
       res.json({
         success: true,
         message: req.t('auth.passwordChanged')
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/profile:
+   *   put:
+   *     summary: به‌روزرسانی پروفایل کاربر
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               name:
+   *                 type: string
+   *                 minLength: 2
+   *                 maxLength: 100
+   *               phoneNumber:
+   *                 type: string
+   *               avatar:
+   *                 type: string
+   *                 format: uri
+   *               language:
+   *                 type: string
+   *                 enum: [fa, en]
+   *     responses:
+   *       200:
+   *         description: پروفایل با موفقیت به‌روزرسانی شد
+   *       400:
+   *         description: خطای اعتبارسنجی
+   */
+  static async updateProfile(req, res, next) {
+    try {
+      const user = await AuthService.updateProfile(req.user.id, req.body);
+
+      res.json({
+        success: true,
+        message: req.t('auth.profileUpdated') || 'پروفایل با موفقیت به‌روزرسانی شد',
+        data: { user }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/sessions:
+   *   get:
+   *     summary: دریافت لیست جلسات فعال
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: لیست جلسات فعال
+   */
+  static async getSessions(req, res, next) {
+    try {
+      // Extract refresh token from request if available
+      const authHeader = req.headers.authorization;
+      const refreshToken = req.cookies?.refreshToken || null;
+      
+      const sessions = await AuthService.getSessions(req.user.id, refreshToken);
+
+      res.json({
+        success: true,
+        data: { sessions }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/sessions/{id}:
+   *   delete:
+   *     summary: قطع یک جلسه خاص
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: جلسه با موفقیت قطع شد
+   */
+  static async revokeSession(req, res, next) {
+    try {
+      const refreshToken = req.cookies?.refreshToken || null;
+      const result = await AuthService.revokeSession(req.user.id, req.params.id, refreshToken);
+
+      res.json({
+        success: true,
+        message: 'جلسه با موفقیت قطع شد',
+        data: {
+          isCurrentSession: result.isCurrentSession
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/sessions:
+   *   delete:
+   *     summary: قطع تمام جلسات
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: تمام جلسات با موفقیت قطع شد
+   */
+  static async revokeAllSessions(req, res, next) {
+    try {
+      const refreshToken = req.cookies?.refreshToken || null;
+      const result = await AuthService.revokeAllSessions(req.user.id, refreshToken);
+
+      res.json({
+        success: true,
+        message: 'تمام جلسات با موفقیت قطع شد',
+        data: {
+          isCurrentSessionRevoked: result.isCurrentSessionRevoked
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/auth/activity:
+   *   get:
+   *     summary: دریافت تاریخچه فعالیت‌های کاربر
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: لیست فعالیت‌های کاربر
+   */
+  static async getActivityHistory(req, res, next) {
+    try {
+      const { LogService } = await import('../../modules/logs/service.js');
+      
+      const filters = {
+        action: req.query.action,
+        resource: req.query.resource,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        page: req.query.page || 1,
+        limit: req.query.limit || 20,
+        search: req.query.search
+      };
+
+      const result = await LogService.getUserActivityLogs(req.user.id, filters);
+
+      res.json({
+        success: true,
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);
@@ -416,8 +588,9 @@ export class AuthController {
    */
   static async requestDashboardOTP(req, res, next) {
     try {
-      const { email } = req.body;
-      const result = await AuthService.requestOTPForDashboard(email);
+      const { email, phoneNumber } = req.body;
+      const identifier = email || phoneNumber;
+      const result = await AuthService.requestOTPForDashboard(identifier);
 
       res.json({
         success: true,
@@ -462,8 +635,9 @@ export class AuthController {
    */
   static async verifyDashboardOTP(req, res, next) {
     try {
-      const { email, otp } = req.body;
-      const result = await AuthService.verifyOTPForDashboard(email, otp);
+      const { email, phoneNumber, otp } = req.body;
+      const identifier = email || phoneNumber;
+      const result = await AuthService.verifyOTPForDashboard(identifier, otp);
 
       res.json({
         success: true,

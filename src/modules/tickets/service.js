@@ -14,7 +14,11 @@ export class TicketService {
       });
 
       await ticket.save();
-      await ticket.populate(['customer', 'category']);
+      const populateFields = ['customer'];
+      if (ticket.category) {
+        populateFields.push('category');
+      }
+      await ticket.populate(populateFields);
 
       // Notify admins about new ticket
       await this.notifyNewTicket(ticket);
