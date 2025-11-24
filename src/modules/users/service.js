@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { User } from '../auth/model.js';
 import { Role } from './roleModel.js';
 import { logger } from '../../utils/logger.js';
@@ -137,10 +138,37 @@ export class UserService {
       }
 
       if (role) {
-        // Support multiple roles separated by comma (e.g., "admin,consultant")
-        const roles = role.split(',').map(r => r.trim()).filter(r => r);
-        if (roles.length > 0) {
-          query.role = roles.length === 1 ? roles[0] : { $in: roles };
+        // Support multiple roles separated by comma (e.g., "admin,support")
+        // Role can be either role name or ObjectId
+        const roleNames = role.split(',').map(r => r.trim()).filter(r => r);
+        if (roleNames.length > 0) {
+          // Check if values are ObjectIds or role names
+          const isObjectId = (str) => mongoose.Types.ObjectId.isValid(str) && str.length === 24;
+          
+          const roleObjectIds = [];
+          const roleNameList = [];
+          
+          for (const roleValue of roleNames) {
+            if (isObjectId(roleValue)) {
+              roleObjectIds.push(roleValue);
+            } else {
+              roleNameList.push(roleValue);
+            }
+          }
+          
+          // Find Role documents by name and get their ObjectIds
+          if (roleNameList.length > 0) {
+            const rolesByName = await Role.find({
+              name: { $in: roleNameList },
+              deletedAt: null
+            }).select('_id');
+            
+            roleObjectIds.push(...rolesByName.map(r => r._id));
+          }
+          
+          if (roleObjectIds.length > 0) {
+            query.role = roleObjectIds.length === 1 ? roleObjectIds[0] : { $in: roleObjectIds };
+          }
         }
       }
       if (status) query.status = status;
