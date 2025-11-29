@@ -127,6 +127,7 @@ export class ServiceService {
         limit = 25,
         search = '',
         category = '',
+        status = '',
         isPopular,
         language = 'fa',
         sortBy = 'orderIndex',
@@ -147,6 +148,10 @@ export class ServiceService {
 
       if (category) {
         query.categories = category;
+      }
+
+      if (status && ['active', 'inactive', 'archived'].includes(status)) {
+        query.status = status;
       }
 
       if (typeof isPopular === 'boolean') {
@@ -192,7 +197,9 @@ export class ServiceService {
       })
         .populate('categories', 'name slug')
         .populate('relatedCaseStudies')
-        .populate('relatedArticles');
+        .populate('relatedArticles')
+        .populate('mainContent.firstSection.slides', 'title featuredImage slug')
+        .populate('mainContent.secondSection.slides', 'title featuredImage slug');
 
       if (!service) {
         throw new Error('خدمت یافت نشد');

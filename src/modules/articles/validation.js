@@ -78,12 +78,12 @@ export const createArticleSchema = Joi.object({
 
   seo: Joi.object({
     metaTitle: Joi.object({
-      fa: Joi.string().max(60),
-      en: Joi.string().max(60)
+      fa: Joi.string().allow('').max(60),
+      en: Joi.string().allow('').max(60)
     }).optional(),
     metaDescription: Joi.object({
-      fa: Joi.string().max(160),
-      en: Joi.string().max(160)
+      fa: Joi.string().allow('').max(160),
+      en: Joi.string().allow('').max(160)
     }).optional(),
     metaKeywords: Joi.object({
       fa: Joi.array().items(Joi.string()),

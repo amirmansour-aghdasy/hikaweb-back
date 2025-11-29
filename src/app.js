@@ -160,18 +160,20 @@ class App {
   }
 
   initializeRoutes() {
-    // API Documentation
-    this.app.use(
-      '/api-docs',
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerSpec, {
-        customSiteTitle: 'هیکاوب - مستندات API',
-        customCss: `
-        .swagger-ui .topbar { background-color: #1f2937; }
-        .swagger-ui .topbar-wrapper img { content: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjZmZmIj48dGV4dCB4PSIxMCIgeT0iMjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCI+SGlrYXdlYjwvdGV4dD48L3N2Zz4='); }
-      `
-      })
-    );
+    // API Documentation (only in development)
+    if (config.ENABLE_SWAGGER && config.NODE_ENV !== 'production') {
+      this.app.use(
+        '/api-docs',
+        swaggerUi.serve,
+        swaggerUi.setup(swaggerSpec, {
+          customSiteTitle: 'هیکاوب - مستندات API',
+          customCss: `
+          .swagger-ui .topbar { background-color: #1f2937; }
+          .swagger-ui .topbar-wrapper img { content: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjZmZmIj48dGV4dCB4PSIxMCIgeT0iMjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCI+SGlrYXdlYjwvdGV4dD48L3N2Zz4='); }
+        `
+        })
+      );
+    }
 
     // Health check
     this.app.get('/health', (req, res) => {

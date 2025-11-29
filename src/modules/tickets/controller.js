@@ -49,12 +49,25 @@ export class TicketController {
    */
   static async createTicket(req, res, next) {
     try {
+      // Map status to ticketStatus if provided
+      if (req.body.status) {
+        req.body.ticketStatus = req.body.status;
+        delete req.body.status;
+      }
+
       const ticket = await TicketService.createTicket(req.body, req.user.id);
+
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
 
       res.status(201).json({
         success: true,
         message: req.t('tickets.createSuccess'),
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);
@@ -173,9 +186,16 @@ export class TicketController {
         ticket.messages = ticket.messages.filter(msg => !msg.isInternal);
       }
 
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
+
       res.json({
         success: true,
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);
@@ -227,10 +247,17 @@ export class TicketController {
     try {
       const ticket = await TicketService.updateTicket(req.params.id, req.body, req.user.id);
 
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
+
       res.json({
         success: true,
         message: req.t('tickets.updateSuccess'),
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);
@@ -274,10 +301,17 @@ export class TicketController {
     try {
       const ticket = await TicketService.addMessage(req.params.id, req.body, req.user.id);
 
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
+
       res.json({
         success: true,
         message: req.t('tickets.messageAdded'),
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);
@@ -318,10 +352,17 @@ export class TicketController {
       const { assignedTo } = req.body;
       const ticket = await TicketService.assignTicket(req.params.id, assignedTo, req.user.id);
 
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
+
       res.json({
         success: true,
         message: req.t('tickets.assignSuccess'),
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);
@@ -362,10 +403,17 @@ export class TicketController {
     try {
       const ticket = await TicketService.closeTicket(req.params.id, req.body, req.user.id);
 
+      // Transform ticketStatus to status for frontend compatibility
+      const ticketObj = ticket.toObject ? ticket.toObject() : ticket;
+      const transformedTicket = {
+        ...ticketObj,
+        status: ticketObj.ticketStatus || 'open'
+      };
+
       res.json({
         success: true,
         message: req.t('tickets.closeSuccess'),
-        data: { ticket }
+        data: { ticket: transformedTicket }
       });
     } catch (error) {
       next(error);

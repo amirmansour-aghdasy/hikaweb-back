@@ -39,7 +39,7 @@ const ticketSchema = new mongoose.Schema(
 
     ticketStatus: {
       type: String,
-      enum: ['open', 'in_progress', 'pending', 'resolved', 'closed'],
+      enum: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'],
       default: 'open'
     },
 
@@ -164,6 +164,40 @@ ticketSchema.index({ subject: 'text', description: 'text' });
 
 Object.assign(ticketSchema.methods, baseSchemaMethods);
 Object.assign(ticketSchema.statics, baseSchemaStatics);
+
+// Add message to ticket
+ticketSchema.methods.addMessage = function(messageData) {
+  this.messages.push({
+    ...messageData,
+    createdAt: new Date()
+  });
+  
+  // Update SLA timestamps
+  if (!this.sla.firstResponseAt && !messageData.isInternal) {
+    this.sla.firstResponseAt = new Date();
+  }
+  this.sla.lastResponseAt = new Date();
+  
+  return this;
+};
+
+// Close ticket with resolution
+ticketSchema.methods.close = async function(resolutionData) {
+  this.ticketStatus = 'closed';
+  this.resolution = {
+    summary: resolutionData.summary,
+    resolvedBy: resolutionData.resolvedBy,
+    resolvedAt: new Date()
+  };
+  
+  // Calculate resolution time if ticket was created
+  if (this.createdAt) {
+    const resolutionTime = Math.floor((new Date() - this.createdAt) / (1000 * 60)); // in minutes
+    this.resolution.resolutionTime = resolutionTime;
+  }
+  
+  return this.save();
+};
 
 // Generate unique ticket number
 ticketSchema.pre('save', async function (next) {

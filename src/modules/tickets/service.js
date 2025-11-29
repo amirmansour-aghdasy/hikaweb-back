@@ -64,11 +64,21 @@ export class TicketService {
         updateData = updates;
       }
 
+      // Map status to ticketStatus if provided
+      if (updateData.status) {
+        updateData.ticketStatus = updateData.status;
+        delete updateData.status;
+      }
+
       Object.assign(ticket, updateData);
       ticket.updatedBy = userId;
 
       await ticket.save();
-      await ticket.populate(['customer', 'assignedTo', 'category']);
+      await ticket.populate([
+        { path: 'customer', select: 'name email avatar' },
+        { path: 'assignedTo', select: 'name email avatar' },
+        { path: 'category', select: 'name' }
+      ]);
 
       logger.info(`Ticket updated: ${ticket.ticketNumber} by user ${userId}`);
       return ticket;
@@ -156,7 +166,11 @@ export class TicketService {
       ticket.updatedBy = userId;
 
       await ticket.save();
-      await ticket.populate(['customer', 'assignedTo']);
+      await ticket.populate([
+        { path: 'customer', select: 'name email avatar' },
+        { path: 'assignedTo', select: 'name email avatar' },
+        { path: 'category', select: 'name' }
+      ]);
 
       // Notify assigned user
       await this.notifyTicketAssignment(ticket);
@@ -184,7 +198,11 @@ export class TicketService {
         resolvedBy: userId
       });
 
-      await ticket.populate(['customer', 'assignedTo']);
+      await ticket.populate([
+        { path: 'customer', select: 'name email avatar' },
+        { path: 'assignedTo', select: 'name email avatar' },
+        { path: 'category', select: 'name' }
+      ]);
 
       // Notify customer about resolution
       await this.notifyTicketResolution(ticket);
@@ -235,7 +253,12 @@ export class TicketService {
 
       if (department) query.department = department;
       if (priority) query.priority = priority;
-      if (ticketStatus) query.ticketStatus = ticketStatus;
+      // Support both 'status' and 'ticketStatus' query params
+      const statusFilter = ticketStatus || filters.status;
+      if (statusFilter) {
+        // Convert 'active' to 'open' for backward compatibility
+        query.ticketStatus = statusFilter === 'active' ? 'open' : statusFilter;
+      }
       if (assignedTo) query.assignedTo = assignedTo;
       if (customer && hasAdminAccess) query.customer = customer;
 
@@ -243,17 +266,24 @@ export class TicketService {
 
       const [tickets, total] = await Promise.all([
         Ticket.find(query)
-          .populate('customer', 'name email')
-          .populate('assignedTo', 'name email')
+          .populate('customer', 'name email avatar')
+          .populate('assignedTo', 'name email avatar')
           .populate('category', 'name')
           .sort({ createdAt: -1 })
           .skip(skip)
-          .limit(parsedLimit),
+          .limit(parsedLimit)
+          .lean(),
         Ticket.countDocuments(query)
       ]);
 
+      // Transform ticketStatus to status for frontend compatibility
+      const transformedTickets = tickets.map(ticket => ({
+        ...ticket,
+        status: ticket.ticketStatus || 'open'
+      }));
+
       return {
-        data: tickets,
+        data: transformedTickets,
         pagination: {
           page: parsedPage,
           limit: parsedLimit,

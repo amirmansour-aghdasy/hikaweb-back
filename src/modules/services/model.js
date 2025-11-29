@@ -30,7 +30,7 @@ const serviceSchema = new mongoose.Schema({
     ref: 'Category'
   }],
   processSteps: [{
-    title: { fa: String, en: String },
+    title: String, // String for display in card
     description: { fa: String, en: String },
     icon: String,
     order: Number
@@ -40,17 +40,55 @@ const serviceSchema = new mongoose.Schema({
     description: { fa: String, en: String },
     icon: String
   }],
+  subServices: [{
+    icon: String,
+    title: { fa: String, en: String }
+  }],
   pricing: {
     startingPrice: { type: Number, min: 0 },
     currency: { type: String, default: 'IRR', enum: ['IRR', 'USD', 'EUR'] },
     isCustom: { type: Boolean, default: false },
     packages: [{
       name: { fa: String, en: String },
-      price: Number,
-      features: [{ fa: String, en: String }],
+      value: String, // Display value as string (e.g., "15.000.000 تومان")
+      subTitle: { fa: String, en: String }, // Suitable for (e.g., "مناسب فروشگاه های حرفه ای")
+      features: [String], // Array of strings (not objects)
+      desc: { fa: String, en: String }, // Short description
+      actionBtnText: { fa: String, en: String }, // CTA button text (optional)
       duration: String,
       isPopular: { type: Boolean, default: false }
     }]
+  },
+  mainContent: {
+    firstSection: {
+      content: {
+        title: { fa: String, en: String },
+        description: { fa: String, en: String },
+        actionBtnText: { fa: String, en: String }
+      },
+      slides: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Portfolio'
+      }]
+    },
+    secondSection: {
+      content: {
+        title: { fa: String, en: String },
+        description: { fa: String, en: String },
+        actionBtnText: { fa: String, en: String }
+      },
+      slides: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Portfolio'
+      }]
+    }
+  },
+  finalDesc: {
+    content: {
+      title: { fa: String, en: String },
+      text: { fa: String, en: String }
+    },
+    image: String
   },
   relatedCaseStudies: [{
     type: mongoose.Schema.Types.ObjectId,

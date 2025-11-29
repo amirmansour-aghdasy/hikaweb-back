@@ -57,7 +57,16 @@ export const auditLog = (action, resource) => {
           } else if (logAction === 'UPLOAD_MEDIA' || logAction === 'BULK_UPLOAD_MEDIA') {
             logAction = 'FILE_UPLOAD';
           }
-          // Keep other actions as-is (LOGIN, LOGOUT, etc.)
+          // Keep specific actions as-is (LOGIN, LOGOUT, ADD_TICKET_MESSAGE, etc.)
+          const specificActions = ['LOGIN', 'LOGOUT', 'PASSWORD_CHANGE', 'PASSWORD_RESET', 
+            'ROLE_ASSIGN', 'PERMISSION_GRANT', 'PERMISSION_REVOKE', 'FILE_UPLOAD', 'FILE_DELETE',
+            'EXPORT', 'IMPORT', 'SETTINGS_UPDATE', 'SYSTEM_CONFIG_CHANGE',
+            'WEBAUTHN_REGISTER_OPTIONS', 'WEBAUTHN_REGISTER', 'WEBAUTHN_AUTHENTICATE',
+            'WEBAUTHN_DELETE_CREDENTIAL', 'WEBAUTHN_AUTHENTICATE_OPTIONS',
+            'ADD_TICKET_MESSAGE', 'ASSIGN_TICKET', 'CLOSE_TICKET'];
+          if (specificActions.includes(logAction)) {
+            // Keep as-is
+          }
         }
 
         // Extract changes from request body if available

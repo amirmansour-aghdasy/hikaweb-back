@@ -178,7 +178,7 @@ export class ArticleService {
 
       // Filter by category
       if (category) {
-        query.categories = category;
+        query.categories = { $in: [category] };
       }
 
       // Filter by author
@@ -187,8 +187,13 @@ export class ArticleService {
       }
 
       // Filter by published status
-      if (typeof isPublished === 'boolean') {
-        query.isPublished = isPublished;
+      // Handle both boolean and string values from query params
+      if (isPublished !== undefined && isPublished !== null && isPublished !== '') {
+        // Convert string to boolean if needed
+        const publishedValue = typeof isPublished === 'string' 
+          ? isPublished === 'true' || isPublished === '1'
+          : Boolean(isPublished);
+        query.isPublished = publishedValue;
       }
 
       // Filter by featured status

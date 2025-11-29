@@ -111,7 +111,9 @@ export class ServiceController {
       const service = await Service.findById(req.params.id)
         .populate('categories', 'name slug')
         .populate('relatedCaseStudies')
-        .populate('relatedArticles');
+        .populate('relatedArticles')
+        .populate('mainContent.firstSection.slides', 'title featuredImage slug')
+        .populate('mainContent.secondSection.slides', 'title featuredImage slug');
 
       if (!service || service.deletedAt) {
         return res.status(404).json({
