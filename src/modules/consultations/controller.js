@@ -33,7 +33,26 @@ export class ConsultationController {
 
       res.status(201).json({
         success: true,
-        message: req.t('consultations.submitSuccess'),
+        message: req.t('consultations.submitSuccess') || 'درخواست مشاوره با موفقیت ثبت شد',
+        data: { consultation }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Simple consultation form endpoint for homepage
+   */
+  static async createSimpleConsultation(req, res, next) {
+    try {
+      // Pass userId if user is authenticated
+      const userId = req.user?.id || null;
+      const consultation = await ConsultationService.createSimpleConsultation(req.body, userId);
+
+      res.status(201).json({
+        success: true,
+        message: 'درخواست مشاوره شما با موفقیت ثبت شد. به زودی با شما تماس خواهیم گرفت.',
         data: { consultation }
       });
     } catch (error) {
@@ -75,7 +94,27 @@ export class ConsultationController {
    */
   static async getConsultations(req, res, next) {
     try {
-      const result = await ConsultationService.getConsultations(req.query);
+      // Get user info if authenticated
+      let userId = null;
+      let userRole = null;
+      
+      // Check if this is a dashboard request
+      // Dashboard requests typically include 'all=true' or 'customer' filter
+      // Since this route requires authentication and authorization, and dashboard is admin-only,
+      // we can assume requests here are from dashboard (unless explicitly filtered)
+      const isDashboardRequest = req.query.all === 'true' || req.query.all === true || req.query.customer;
+      
+      if (req.user) {
+        userId = req.user.id;
+        // Get user with role populated
+        const User = (await import('../auth/model.js')).User;
+        const user = await User.findById(userId).populate('role');
+        if (user && user.role) {
+          userRole = user.role;
+        }
+      }
+
+      const result = await ConsultationService.getConsultations(req.query, userId, userRole, isDashboardRequest);
 
       res.json({
         success: true,

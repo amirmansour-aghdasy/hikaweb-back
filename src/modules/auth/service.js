@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { User } from './model.js';
 import { Role } from '../users/roleModel.js';
+import { Consultation } from '../consultations/model.js';
 import { config } from '../../config/environment.js';
 import { redisClient } from '../../config/redis.js';
 import { smsService } from '../../utils/sms.js';
@@ -139,7 +140,7 @@ export class AuthService {
     }
   }
 
-  static async verifyOTP(phoneNumber, otp) {
+  static async verifyOTP(phoneNumber, otp, additionalData = {}) {
     try {
       const redis = redisClient.getClient();
       const otpData = await redis.get(`otp:${phoneNumber}`);
@@ -180,26 +181,95 @@ export class AuthService {
       let user = await User.findOne({ phoneNumber }).populate('role');
 
       if (!user) {
+        // New user registration
         const defaultRole = await Role.findOne({ name: 'user' });
-        user = new User({
-            phoneNumber,
+        if (!defaultRole) {
+          throw new Error('نقش پیش‌فرض یافت نشد');
+        }
+
+        const userData = {
+          phoneNumber,
           isPhoneNumberVerified: true,
           role: defaultRole._id,
-          name: `کاربر_${phoneNumber.slice(-4)}`
-        });
+          name: additionalData.name || `کاربر_${phoneNumber.slice(-4)}`
+        };
+
+        // Add email if provided
+        if (additionalData.email) {
+          // Check if email is already taken
+          const existingEmail = await User.findOne({ email: additionalData.email });
+          if (existingEmail) {
+            logger.warn(`Email ${additionalData.email} already exists, skipping email assignment`);
+          } else {
+            userData.email = additionalData.email.toLowerCase().trim();
+          }
+        }
+
+        user = new User(userData);
         await user.save();
         await user.populate('role');
+        
+        // Link existing consultations with this phone number to the new user
+        await this.linkConsultationsToUser(user._id, phoneNumber, user.email);
+        
+        logger.info(`New user registered via OTP: ${phoneNumber}`);
       } else {
-        user.isPhoneNumberVerified = true;
-        user.lastLogin = new Date();
-        await user.save();
+        // Existing user login
+        // Use updateOne to avoid validation issues (password/email might be required in schema)
+        const updateData = {
+          isPhoneNumberVerified: true,
+          lastLogin: new Date()
+        };
+        
+        // Update name if provided and not already set
+        if (additionalData.name && !user.name) {
+          updateData.name = additionalData.name;
+        }
+        
+        // Update email if provided and not already set
+        if (additionalData.email && !user.email) {
+          // Check if email is already taken
+          const existingEmail = await User.findOne({ email: additionalData.email });
+          if (!existingEmail) {
+            updateData.email = additionalData.email.toLowerCase().trim();
+          }
+        }
+        
+        // Use updateOne instead of save to avoid validation issues
+        await User.updateOne({ _id: user._id }, { $set: updateData });
+        
+        // Reload user to get updated data (must reload after updateOne)
+        user = await User.findById(user._id).populate('role');
       }
 
       const tokens = this.generateTokens(user);
 
+      // Store refresh token using updateOne to avoid validation issues
+      const refreshTokenData = {
+        token: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        createdAt: new Date()
+      };
+      
+      // Get current refresh tokens and add new one
+      const currentTokens = user.refreshTokens || [];
+      const updatedTokens = [...currentTokens, refreshTokenData];
+      
+      // Keep only last 5 tokens
+      const tokensToKeep = updatedTokens.slice(-5);
+      
+      // Use updateOne to avoid validation issues
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { refreshTokens: tokensToKeep } }
+      );
+      
+      // Update user object for response
+      user.refreshTokens = tokensToKeep;
+
       return { user, tokens };
     } catch (error) {
-      logger.error('OTP request error:', error);
+      logger.error('OTP verification error:', error);
       throw error;
     }
   }
@@ -356,6 +426,78 @@ export class AuthService {
       return user;
     } catch (error) {
       logger.error('Update profile error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify phone number OTP and update user's phone number
+   * This is used when user wants to change their phone number
+   */
+  static async verifyPhoneNumberOTP(userId, newPhoneNumber, otp) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('کاربر یافت نشد');
+      }
+
+      // Verify OTP for the new phone number
+      const redis = redisClient.getClient();
+      const otpData = await redis.get(`otp:${newPhoneNumber}`);
+
+      if (!otpData) {
+        throw new Error('کد تایید منقضی شده یا یافت نشد');
+      }
+
+      const { otp: storedOTP, expiresAt, attempts } = JSON.parse(otpData);
+
+      if (attempts >= 3) {
+        await redis.del(`otp:${newPhoneNumber}`);
+        throw new Error('تلاش‌های زیادی انجام شده است');
+      }
+
+      if (new Date() > new Date(expiresAt)) {
+        await redis.del(`otp:${newPhoneNumber}`);
+        throw new Error('کد تایید منقضی شده است');
+      }
+
+      if (otp !== storedOTP) {
+        await redis.setEx(
+          `otp:${newPhoneNumber}`,
+          300,
+          JSON.stringify({
+            otp: storedOTP,
+            expiresAt,
+            attempts: attempts + 1
+          })
+        );
+        throw new Error('کد تایید نادرست است');
+      }
+
+      // OTP verified successfully - clean up
+      await redis.del(`otp:${newPhoneNumber}`);
+
+      // Check if new phone number is already taken by another user
+      const existingUser = await User.findOne({ 
+        phoneNumber: newPhoneNumber,
+        _id: { $ne: userId }
+      });
+
+      if (existingUser) {
+        throw new Error('این شماره موبایل قبلاً توسط کاربر دیگری استفاده شده است');
+      }
+
+      // Update phone number and mark as verified
+      const oldPhoneNumber = user.phoneNumber;
+      user.phoneNumber = newPhoneNumber;
+      user.isPhoneNumberVerified = true;
+      await user.save();
+      await user.populate('role');
+
+      logger.info(`Phone number updated for user ${user.email} from ${oldPhoneNumber} to ${newPhoneNumber}`);
+      return user;
+    } catch (error) {
+      logger.error('Verify phone number OTP error:', error);
       throw error;
     }
   }
@@ -820,6 +962,82 @@ export class AuthService {
     } catch (error) {
       logger.error('Google token verification error:', error);
       throw new Error('تایید توکن Google ناموفق بود');
+    }
+  }
+
+  /**
+   * Link existing consultations to a newly registered user
+   * This method searches for consultations with matching phone number or email
+   * and logs them for reference. The consultations can be found by phone/email in the profile.
+   * 
+   * Note: Currently, Consultation model doesn't have a direct 'user' field.
+   * Consultations are linked via phoneNumber/email matching in getConsultations.
+   * In the future, we can add a 'user' field to Consultation model for better linking.
+   */
+  static async linkConsultationsToUser(userId, phoneNumber, email = null) {
+    try {
+      // Normalize phone number (remove +98, leading zeros, etc.)
+      const normalizePhone = (phone) => {
+        if (!phone) return null;
+        // Remove all non-digit characters
+        let normalized = phone.replace(/\D/g, '');
+        // Remove leading 98 or 0
+        if (normalized.startsWith('98')) {
+          normalized = normalized.substring(2);
+        } else if (normalized.startsWith('0')) {
+          normalized = normalized.substring(1);
+        }
+        return normalized;
+      };
+
+      const normalizedPhone = normalizePhone(phoneNumber);
+      
+      // Build query to find consultations
+      const query = {
+        deletedAt: null,
+        $or: []
+      };
+
+      // Match by phone number (normalized)
+      if (normalizedPhone) {
+        // Try different phone number formats
+        query.$or.push(
+          { phoneNumber: phoneNumber },
+          { phoneNumber: `0${normalizedPhone}` },
+          { phoneNumber: `+98${normalizedPhone}` },
+          { phoneNumber: `98${normalizedPhone}` },
+          { phoneNumber: normalizedPhone }
+        );
+      }
+
+      // Match by email if provided
+      if (email) {
+        query.$or.push({ email: email.toLowerCase().trim() });
+      }
+
+      // If no conditions, return early
+      if (query.$or.length === 0) {
+        return;
+      }
+
+      // Find consultations that match
+      const consultations = await Consultation.find(query).select('_id fullName phoneNumber email createdAt');
+
+      if (consultations.length === 0) {
+        logger.info(`No existing consultations found to link for user ${userId} (${phoneNumber})`);
+        return;
+      }
+
+      // Link consultations to user by updating the 'user' field
+      await Consultation.updateMany(
+        { _id: { $in: consultations.map(c => c._id) } },
+        { $set: { user: userId } }
+      );
+      
+      logger.info(`Linked ${consultations.length} existing consultations to user ${userId} (${phoneNumber})`);
+    } catch (error) {
+      logger.error('Error linking consultations to user:', error);
+      // Don't throw - this is not critical for user registration
     }
   }
 }

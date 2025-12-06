@@ -183,8 +183,8 @@ export class AuthController {
    */
   static async verifyOTP(req, res, next) {
     try {
-      const { phoneNumber, otp } = req.body;
-      const result = await AuthService.verifyOTP(phoneNumber, otp);
+      const { phoneNumber, otp, name, email } = req.body;
+      const result = await AuthService.verifyOTP(phoneNumber, otp, { name, email });
 
       res.json({
         success: true,
@@ -192,6 +192,67 @@ export class AuthController {
         data: {
           user: result.user,
           tokens: result.tokens
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Frontend-compatible alias for send-otp (accepts 'phone' instead of 'phoneNumber')
+   */
+  static async sendOTPAlias(req, res, next) {
+    try {
+      // Map 'phone' to 'phoneNumber' for compatibility
+      if (req.body.phone && !req.body.phoneNumber) {
+        req.body.phoneNumber = req.body.phone;
+      }
+      return AuthController.requestOTP(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Frontend-compatible alias for verify-otp (accepts 'phone' and 'code' instead of 'phoneNumber' and 'otp')
+   */
+  static async verifyOTPAlias(req, res, next) {
+    try {
+      // Map frontend parameter names to backend
+      if (req.body.phone && !req.body.phoneNumber) {
+        req.body.phoneNumber = req.body.phone;
+      }
+      if (req.body.code && !req.body.otp) {
+        req.body.otp = req.body.code;
+      }
+      return AuthController.verifyOTP(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Check if user exists by phone number
+   */
+  static async checkUser(req, res, next) {
+    try {
+      const { phone, phoneNumber, domain } = req.body;
+      const phoneToCheck = phone || phoneNumber;
+
+      if (!phoneToCheck) {
+        return res.status(400).json({
+          success: false,
+          message: 'شماره موبایل الزامی است'
+        });
+      }
+
+      const user = await User.findOne({ phoneNumber: phoneToCheck });
+
+      res.json({
+        success: true,
+        data: {
+          exists: !!user
         }
       });
     } catch (error) {
@@ -311,7 +372,9 @@ export class AuthController {
 
       res.json({
         success: true,
-        data: user
+        data: {
+          user
+        }
       });
     } catch (error) {
       next(error);
@@ -402,6 +465,32 @@ export class AuthController {
       res.json({
         success: true,
         message: req.t('auth.profileUpdated') || 'پروفایل با موفقیت به‌روزرسانی شد',
+        data: { user }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Verify phone number OTP and update user's phone number
+   */
+  static async verifyPhoneNumberOTP(req, res, next) {
+    try {
+      const { phoneNumber, otp } = req.body;
+      
+      if (!phoneNumber || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: 'شماره موبایل و کد تأیید الزامی است'
+        });
+      }
+
+      const user = await AuthService.verifyPhoneNumberOTP(req.user.id, phoneNumber, otp);
+
+      res.json({
+        success: true,
+        message: 'شماره موبایل با موفقیت به‌روزرسانی شد',
         data: { user }
       });
     } catch (error) {

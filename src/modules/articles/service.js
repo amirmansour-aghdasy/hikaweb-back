@@ -1,6 +1,7 @@
 import { Article } from './model.js';
 import { Category } from '../categories/model.js';
 import { Media } from '../media/model.js';
+import { Portfolio } from '../portfolio/model.js';
 import { logger } from '../../utils/logger.js';
 
 export class ArticleService {
@@ -168,7 +169,8 @@ export class ArticleService {
       let query = { deletedAt: null };
 
       // Search in title and content
-      if (search) {
+      // Filter out 'undefined' string and empty values
+      if (search && search !== 'undefined' && search.trim() !== '') {
         query.$or = [
           { [`title.${language}`]: new RegExp(search, 'i') },
           { [`content.${language}`]: new RegExp(search, 'i') },
@@ -177,8 +179,13 @@ export class ArticleService {
       }
 
       // Filter by category
-      if (category) {
-        query.categories = { $in: [category] };
+      // Filter out 'undefined' string, empty values, and validate ObjectId format
+      if (category && category !== 'undefined' && category !== 'all' && category.trim() !== '') {
+        // Validate ObjectId format (24 hex characters)
+        const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+        if (objectIdPattern.test(category)) {
+          query.categories = { $in: [category] };
+        }
       }
 
       // Filter by author
@@ -284,6 +291,62 @@ export class ArticleService {
     }
   }
 
+  static async getRelatedVideos(articleId, limit = 4) {
+    try {
+      const article = await Article.findById(articleId);
+
+      if (!article) {
+        return [];
+      }
+
+      // Get portfolios with videos that share categories or services with the article
+      // Since articles have categories, we'll match portfolios by categories
+      const relatedVideos = await Portfolio.find({
+        categories: { $in: article.categories },
+        'gallery.type': 'video',
+        deletedAt: null
+      })
+        .populate('services', 'name')
+        .populate('categories', 'name')
+        .sort({ views: -1, 'project.completedAt': -1 })
+        .limit(limit)
+        .select('title slug featuredImage gallery shortDescription views');
+
+      // Filter to only include portfolios that have at least one video
+      return relatedVideos.filter(portfolio => 
+        portfolio.gallery && portfolio.gallery.some(item => item.type === 'video')
+      );
+    } catch (error) {
+      logger.error('Get related videos error:', error);
+      return [];
+    }
+  }
+
+  static async getRelatedPortfolios(articleId, limit = 4) {
+    try {
+      const article = await Article.findById(articleId);
+
+      if (!article) {
+        return [];
+      }
+
+      // Get portfolios that share categories with the article
+      const relatedPortfolios = await Portfolio.find({
+        categories: { $in: article.categories },
+        deletedAt: null
+      })
+        .populate('services', 'name')
+        .populate('categories', 'name')
+        .sort({ views: -1, 'project.completedAt': -1 })
+        .limit(limit);
+
+      return relatedPortfolios;
+    } catch (error) {
+      logger.error('Get related portfolios error:', error);
+      return [];
+    }
+  }
+
   static async getFeaturedArticles(limit = 6) {
     try {
       const articles = await Article.find({
@@ -299,6 +362,25 @@ export class ArticleService {
       return articles;
     } catch (error) {
       logger.error('Get featured articles error:', error);
+      return [];
+    }
+  }
+
+  static async getPopularArticles(limit = 5) {
+    try {
+      const articles = await Article.find({
+        isPublished: true,
+        deletedAt: null,
+        views: { $gt: 0 }
+      })
+        .populate('author', 'name avatar')
+        .populate('categories', 'name')
+        .sort({ views: -1, publishedAt: -1 })
+        .limit(limit);
+
+      return articles;
+    } catch (error) {
+      logger.error('Get popular articles error:', error);
       return [];
     }
   }

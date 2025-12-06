@@ -1,11 +1,47 @@
 import { Consultation } from './model.js';
 import { Service } from '../services/model.js';
 import { User } from '../auth/model.js';
+import { Role } from '../users/roleModel.js';
+import { NotificationService } from '../notifications/service.js';
 import { smsService } from '../../utils/sms.js';
 import { baleService } from '../../utils/bale.js';
 import { logger } from '../../utils/logger.js';
 
 export class ConsultationService {
+  static async createSimpleConsultation(simpleData, userId = null) {
+    try {
+      // Find service by ID (simple and reliable)
+      const service = await Service.findOne({
+        _id: simpleData.serviceId,
+        deletedAt: null
+      });
+
+      if (!service) {
+        throw new Error('خدمت انتخابی یافت نشد');
+      }
+
+      // Convert simple form data to full consultation data
+      const consultationData = {
+        fullName: `${simpleData.firstName} ${simpleData.lastName}`.trim(),
+        phoneNumber: simpleData.phone,
+        email: simpleData.email || `${simpleData.phone}@temp.hikaweb.ir`, // Use temp email if not provided
+        services: [service._id],
+        projectDescription: `درخواست مشاوره برای خدمت: ${service.name?.fa || 'خدمت انتخابی'}`,
+        budget: 'custom', // Default value - 'flexible' is not a valid enum value
+        timeline: 'flexible', // Default value - this is valid
+        preferredContactMethod: 'phone',
+        preferredContactTime: 'anytime',
+        leadSource: 'website',
+        user: userId // Link to user if authenticated
+      };
+
+      return await this.createConsultation(consultationData);
+    } catch (error) {
+      logger.error('Simple consultation creation error:', error);
+      throw error;
+    }
+  }
+
   static async createConsultation(consultationData) {
     try {
       // Validate services exist
@@ -57,13 +93,14 @@ export class ConsultationService {
     }
   }
 
-  static async getConsultations(filters = {}) {
+  static async getConsultations(filters = {}, userId = null, userRole = null, isDashboardRequest = false) {
     try {
       const {
         page = 1,
         limit = 25,
         search = '',
         requestStatus = '',
+        status = '', // Support both 'status' and 'requestStatus' for compatibility
         assignedTo = '',
         leadSource = '',
         dateFrom = '',
@@ -74,9 +111,45 @@ export class ConsultationService {
       const parsedLimit = parseInt(limit) || 25;
 
       let query = { deletedAt: null };
+      let userFilterConditions = [];
 
+      // Check if user has admin access
+      const hasAdminAccess = userRole && (
+        userRole.permissions?.includes('consultations.read') || 
+        userRole.permissions?.includes('admin.all') ||
+        userRole.name === 'super_admin' ||
+        userRole.name === 'admin'
+      );
+
+      // Since the /consultations route requires 'consultations.read' permission (admin-only),
+      // we can assume all requests here are from dashboard
+      // Admins should see all consultations, regular users (if any) see only their own
+      if (userId) {
+        if (hasAdminAccess) {
+          // Admin users see all consultations (no user filter)
+          // This applies to both dashboard and any other admin access
+        } else {
+          // Regular user (shouldn't happen for this route, but handle it anyway)
+          // Show only their consultations
+          const user = await User.findById(userId);
+          if (user) {
+            userFilterConditions.push({ user: userId });
+            if (user.phoneNumber) {
+              userFilterConditions.push({ phoneNumber: user.phoneNumber });
+            }
+            if (user.email) {
+              userFilterConditions.push({ email: user.email });
+            }
+          } else {
+            query._id = null; // This will return no results
+          }
+        }
+      }
+
+      // Handle search
+      let searchConditions = [];
       if (search) {
-        query.$or = [
+        searchConditions = [
           { fullName: new RegExp(search, 'i') },
           { email: new RegExp(search, 'i') },
           { phoneNumber: new RegExp(search, 'i') },
@@ -84,7 +157,24 @@ export class ConsultationService {
         ];
       }
 
-      if (requestStatus) query.requestStatus = requestStatus;
+      // Combine user filter and search conditions
+      if (userFilterConditions.length > 0 && searchConditions.length > 0) {
+        // Both user filter and search exist - use $and to combine
+        query.$and = [
+          { $or: userFilterConditions },
+          { $or: searchConditions }
+        ];
+      } else if (userFilterConditions.length > 0) {
+        // Only user filter
+        query.$or = userFilterConditions;
+      } else if (searchConditions.length > 0) {
+        // Only search
+        query.$or = searchConditions;
+      }
+
+      // Support both 'status' and 'requestStatus' query parameters
+      const statusFilter = status || requestStatus;
+      if (statusFilter) query.requestStatus = statusFilter;
       if (assignedTo) query.assignedTo = assignedTo;
       if (leadSource) query.leadSource = leadSource;
 
@@ -171,16 +261,48 @@ export class ConsultationService {
       // Send Telegram notification
       await baleService.sendSystemAlert(message, 'info');
 
-      // Send SMS to admin numbers
+      // Find admin and super_admin roles
+      const adminRoles = await Role.find({
+        name: { $in: ['super_admin', 'admin'] },
+        deletedAt: null
+      });
+
+      // Get admin users (super_admin and admin roles)
       const adminUsers = await User.find({
-        $or: [{ 'role.permissions': 'consultations.read' }, { 'role.permissions': 'admin.all' }]
+        role: { $in: adminRoles.map(r => r._id) },
+        deletedAt: null
       }).populate('role');
 
-      const adminPhoneNumbers = adminUsers.filter(user => user.phoneNumber).map(user => user.phoneNumber);
+      // Send SMS to admin phone numbers
+      const adminPhoneNumbers = adminUsers
+        .filter(user => user.phoneNumber && user.isPhoneNumberVerified)
+        .map(user => user.phoneNumber);
 
       if (adminPhoneNumbers.length > 0) {
-        const smsMessage = `درخواست مشاوره جدید از ${consultation.fullName}. لطفاً وارد پنل شوید.`;
+        const smsMessage = `درخواست مشاوره جدید از ${consultation.fullName} (${consultation.phoneNumber}). لطفاً وارد پنل شوید.`;
         await smsService.sendBulk(adminPhoneNumbers, smsMessage);
+      }
+
+      // Create dashboard notifications for admins
+      const adminUserIds = adminUsers.map(user => user._id);
+      if (adminUserIds.length > 0) {
+        await NotificationService.broadcastNotification(adminUserIds, {
+          type: 'consultation_new',
+          title: {
+            fa: 'درخواست مشاوره جدید',
+            en: 'New Consultation Request'
+          },
+          message: {
+            fa: `درخواست مشاوره جدید از ${consultation.fullName} برای خدمت ${services}`,
+            en: `New consultation request from ${consultation.fullName} for ${services}`
+          },
+          relatedEntity: {
+            type: 'consultation',
+            id: consultation._id
+          },
+          priority: 'high',
+          actionUrl: `/dashboard/consultations/${consultation._id}`
+        });
       }
     } catch (error) {
       logger.error('New consultation notification error:', error);

@@ -45,6 +45,8 @@ import logRoutes from './modules/logs/routes.js';
 import taskRoutes from './modules/tasks/routes.js';
 import calendarRoutes from './modules/calendar/routes.js';
 import systemRoutes from './modules/system/routes.js';
+import bookmarkRoutes from './modules/bookmarks/routes.js';
+import articleRatingRoutes from './modules/articleRatings/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -93,8 +95,10 @@ class App {
             : [
                 'http://localhost:1281',
                 'http://localhost:3000',
+                'http://localhost:3001',
                 'http://127.0.0.1:1281',
-                'http://127.0.0.1:3000'
+                'http://127.0.0.1:3000',
+                'http://127.0.0.1:3001'
               ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -199,6 +203,7 @@ class App {
 
     // Content Management
     apiRouter.use('/articles', articleRoutes);
+    apiRouter.use('/bookmarks', bookmarkRoutes);
     apiRouter.use('/services', serviceRoutes);
     apiRouter.use('/portfolio', portfolioRoutes);
     apiRouter.use('/comments', commentRoutes);

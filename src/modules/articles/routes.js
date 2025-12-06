@@ -1,18 +1,34 @@
 import { Router } from 'express';
 import { ArticleController } from './controller.js';
+import { ArticleRatingController } from '../articleRatings/controller.js';
+import { BookmarkController } from '../bookmarks/controller.js';
 import { validate } from '../../middleware/validation.js';
 import { authenticate, optionalAuth } from '../../middleware/auth.js';
 import { authorize } from '../../middleware/authorization.js';
 import { auditLog } from '../../middleware/audit.js';
 import { sanitizeHTML } from '../../middleware/validation.js';
 import { createArticleSchema, updateArticleSchema, publishArticleSchema } from './validation.js';
+import Joi from 'joi';
 
 const router = Router();
+
+const rateArticleSchema = Joi.object({
+  rating: Joi.number().integer().min(1).max(5).required().messages({
+    'any.required': 'امتیاز الزامی است',
+    'number.min': 'امتیاز باید حداقل ۱ باشد',
+    'number.max': 'امتیاز نمی‌تواند بیش از ۵ باشد'
+  })
+});
 
 // Public routes
 router.get('/', optionalAuth, ArticleController.getArticles);
 router.get('/featured', ArticleController.getFeaturedArticles);
+router.get('/popular', ArticleController.getPopularArticles);
 router.get('/slug/:slug', optionalAuth, ArticleController.getArticleBySlug);
+
+// Public rating routes (no auth required)
+router.post('/:id/rate', optionalAuth, validate(rateArticleSchema), ArticleRatingController.rateArticle);
+router.get('/:id/user-rating', optionalAuth, ArticleRatingController.getUserRating);
 
 // Protected routes
 router.use(authenticate);
@@ -56,5 +72,9 @@ router.delete(
 );
 
 router.post('/:id/like', ArticleController.likeArticle);
+
+// Bookmark routes (require auth)
+router.post('/:id/bookmark', authenticate, auditLog('TOGGLE_BOOKMARK', 'bookmarks'), BookmarkController.toggleBookmark);
+router.get('/:id/bookmark/check', authenticate, BookmarkController.checkBookmark);
 
 export default router;

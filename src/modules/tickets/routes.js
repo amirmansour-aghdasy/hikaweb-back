@@ -18,21 +18,25 @@ const router = Router();
 router.use(authenticate);
 
 // Customer and admin routes
+// POST /tickets - Allow any authenticated user to create tickets (frontend access)
+// Dashboard access requires tickets.create permission (handled in controller if needed)
 router.post(
   '/',
-  authorize(['tickets.create']),
   validate(createTicketSchema),
   auditLog('CREATE_TICKET', 'tickets'),
   TicketController.createTicket
 );
 
+// GET /tickets - Allow any authenticated user to read their own tickets (frontend access)
+// Controller handles filtering to show only user's own tickets for non-admin users
 router.get(
   '/',
-  authorize(['tickets.read', 'tickets.create']), // Customers can read their own tickets
   TicketController.getTickets
 );
 
-router.get('/:id', authorize(['tickets.read', 'tickets.create']), TicketController.getTicketById);
+// GET /tickets/:id - Allow any authenticated user to read their own tickets (frontend access)
+// Controller handles permission check
+router.get('/:id', TicketController.getTicketById);
 
 router.put(
   '/:id',
@@ -42,9 +46,10 @@ router.put(
   TicketController.updateTicket
 );
 
+// POST /tickets/:id/messages - Allow any authenticated user to add messages to their own tickets (frontend access)
+// Controller handles permission check
 router.post(
   '/:id/messages',
-  authorize(['tickets.read', 'tickets.create']),
   validate(addMessageSchema),
   auditLog('ADD_TICKET_MESSAGE', 'tickets'),
   TicketController.addMessage

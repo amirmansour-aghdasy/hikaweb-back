@@ -92,4 +92,27 @@ export class SettingsController {
       next(error);
     }
   }
+
+  /**
+   * @swagger
+   * /api/v1/settings/maintenance:
+   *   get:
+   *     summary: دریافت وضعیت تعمیر و نگهداری
+   *     tags: [Settings]
+   *     responses:
+   *       200:
+   *         description: وضعیت تعمیر و نگهداری دریافت شد
+   */
+  static async getMaintenanceStatus(req, res, next) {
+    try {
+      const maintenanceStatus = await SettingsService.getMaintenanceStatus();
+
+      res.json({
+        success: true,
+        data: { maintenance: maintenanceStatus }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

@@ -11,12 +11,8 @@ class SMSService {
 
   async sendOTP(phoneNumber, otp) {
     try {
-      const url = `${this.baseURL}/${this.apiKey}/verify/lookup.json`;
-      const response = await axios.post(url, {
-        receptor: phoneNumber,
-        token: otp,
-        template: 'verify'
-      });
+      const url = `${this.baseURL}/${this.apiKey}/verify/lookup.json?receptor=${phoneNumber}&token=${otp}&template=verify`;
+      const response = await axios.post(url);
       logger.info(`OTP sent to ${phoneNumber}`);
       return response.data;
     } catch (error) {
@@ -46,15 +42,26 @@ class SMSService {
         return;
       }
 
-      // Kavenegar supports bulk sending
-      const url = `${this.baseURL}/${this.apiKey}/sms/sendarray.json`;
-      const receptors = phoneNumbers.join(',');
+      if (!this.sender) {
+        logger.warn('KAVENEGAR_SENDER is not configured. Skipping bulk SMS.');
+        return;
+      }
+
+      // Kavenegar sendarray requires arrays as JSON strings in query parameters
+      // Each array must have the same length
+      // Create arrays: each phone number gets the same sender and message
+      const receptors = phoneNumbers;
+      const senders = phoneNumbers.map(() => this.sender);
+      const messages = phoneNumbers.map(() => message);
       
-      const response = await axios.post(url, {
-        receptor: receptors,
-        sender: this.sender,
-        message: message
-      });
+      // Convert arrays to JSON strings for query parameters
+      const receptorParam = encodeURIComponent(JSON.stringify(receptors));
+      const senderParam = encodeURIComponent(JSON.stringify(senders));
+      const messageParam = encodeURIComponent(JSON.stringify(messages));
+      
+      const url = `${this.baseURL}/${this.apiKey}/sms/sendarray.json?receptor=${receptorParam}&sender=${senderParam}&message=${messageParam}`;
+      
+      const response = await axios.post(url);
       
       logger.info(`Bulk SMS sent to ${phoneNumbers.length} recipients`);
       return response.data;

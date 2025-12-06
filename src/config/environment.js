@@ -18,6 +18,7 @@ export const config = {
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     
     // External Services
+    KAVENEGAR_LOOKUP: process.env.KAVENEGAR_LOOKUP,
     KAVENEGAR_API_KEY: process.env.KAVENEGAR_API_KEY,
     KAVENEGAR_SENDER: process.env.KAVENEGAR_SENDER,
     

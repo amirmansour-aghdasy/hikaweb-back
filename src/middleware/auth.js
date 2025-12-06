@@ -60,11 +60,27 @@ export const optionalAuth = async (req, res, next) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, config.JWT_SECRET);
-      req.user = decoded;
+      req.user = {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        permissions: decoded.permissions
+      };
     }
+    
+    // Generate user identifier for anonymous users (for rating system)
+    const { ArticleRatingService } = await import('../modules/articleRatings/service.js');
+    req.userIdentifier = ArticleRatingService.generateUserIdentifier(req);
     
     next();
   } catch (error) {
+    // Generate user identifier even if auth fails
+    try {
+      const { ArticleRatingService } = await import('../modules/articleRatings/service.js');
+      req.userIdentifier = ArticleRatingService.generateUserIdentifier(req);
+    } catch (err) {
+      // Ignore
+    }
     next();
   }
 };

@@ -8,8 +8,9 @@ import { updateSettingsSchema } from './validation.js';
 
 const router = Router();
 
-// Public route for basic site info
+// Public routes
 router.get('/public', SettingsController.getPublicSettings);
+router.get('/maintenance', SettingsController.getMaintenanceStatus);
 
 // Protected routes
 router.use(authenticate);

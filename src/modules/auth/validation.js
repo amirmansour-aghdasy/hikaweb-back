@@ -81,7 +81,30 @@ export const otpVerifySchema = Joi.object({
       'string.length': 'کد تایید باید ۶ رقم باشد',
       'string.pattern.base': 'کد تایید باید عددی باشد',
       'any.required': 'کد تایید الزامی است'
-    })
+    }),
+  
+  // Optional fields for new user registration
+  name: Joi.string()
+    .trim()
+    .min(2)
+    .max(100)
+    .optional()
+    .messages({
+      'string.min': 'نام باید حداقل ۲ کاراکتر باشد',
+      'string.max': 'نام نمی‌تواند بیشتر از ۱۰۰ کاراکتر باشد'
+    }),
+  
+  email: Joi.string()
+    .email()
+    .lowercase()
+    .trim()
+    .optional()
+    .messages({
+      'string.email': 'فرمت ایمیل صحیح نیست'
+    }),
+  
+  domain: Joi.string()
+    .optional()
 });
 
 export const refreshTokenSchema = Joi.object({
@@ -223,4 +246,23 @@ export const updateProfileSchema = Joi.object({
   language: Joi.string()
     .valid('fa', 'en')
     .optional()
+});
+
+export const verifyPhoneNumberOTPSchema = Joi.object({
+  phoneNumber: Joi.string()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'شماره موبایل صحیح نیست',
+      'any.required': 'شماره موبایل الزامی است'
+    }),
+  otp: Joi.string()
+    .length(6)
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({
+      'string.length': 'کد تأیید باید ۶ رقم باشد',
+      'string.pattern.base': 'کد تأیید باید عدد باشد',
+      'any.required': 'کد تأیید الزامی است'
+    })
 });

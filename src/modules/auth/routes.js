@@ -13,6 +13,7 @@ import {
   refreshTokenSchema,
   changePasswordSchema,
   updateProfileSchema,
+  verifyPhoneNumberOTPSchema,
   googleAuthSchema,
   dashboardOTPRequestSchema,
   dashboardOTPVerifySchema,
@@ -49,6 +50,27 @@ router.post('/otp/verify',
   validate(otpVerifySchema),
   auditLog('OTP_VERIFY', 'users'),
   AuthController.verifyOTP
+);
+
+// Frontend-compatible route aliases
+router.post('/send-otp',
+  otpLimiter,
+  validate(otpRequestSchema),
+  auditLog('OTP_REQUEST', 'users'),
+  AuthController.sendOTPAlias
+);
+
+router.post('/verify-otp',
+  authLimiter,
+  validate(otpVerifySchema),
+  auditLog('OTP_VERIFY', 'users'),
+  AuthController.verifyOTPAlias
+);
+
+// Check if user exists
+router.post('/check-user',
+  authLimiter,
+  AuthController.checkUser
 );
 
 router.post('/refresh',
@@ -121,7 +143,6 @@ router.get('/csrf-token',
 );
 
 router.get('/me',
-  requireDashboardAccess,
   AuthController.me
 );
 
@@ -131,7 +152,23 @@ router.put('/change-password',
   AuthController.changePassword
 );
 
+// Profile update route - accessible to all authenticated users (frontend)
 router.put('/profile',
+  validate(updateProfileSchema),
+  auditLog('UPDATE_PROFILE', 'users'),
+  AuthController.updateProfile
+);
+
+// Verify phone number OTP and update phone number
+router.post('/profile/verify-phone',
+  authenticate,
+  validate(verifyPhoneNumberOTPSchema),
+  auditLog('VERIFY_PHONE_OTP', 'users'),
+  AuthController.verifyPhoneNumberOTP
+);
+
+// Dashboard-only profile update route (for backward compatibility)
+router.put('/dashboard/profile',
   requireDashboardAccess,
   validate(updateProfileSchema),
   auditLog('UPDATE_PROFILE', 'users'),

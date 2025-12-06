@@ -59,10 +59,31 @@ export class SettingsService {
         business: {
           companyName: settings.business?.companyName,
           businessHours: settings.business?.businessHours
+        },
+        maintenanceMode: settings.system?.maintenanceMode || {
+          enabled: false,
+          message: { fa: '', en: '' }
         }
       };
     } catch (error) {
       logger.error('Get public settings error:', error);
+      throw error;
+    }
+  }
+
+  static async getMaintenanceStatus() {
+    try {
+      const settings = await Settings.getInstance();
+      return {
+        enabled: settings.system?.maintenanceMode?.enabled || false,
+        message: settings.system?.maintenanceMode?.message || {
+          fa: 'سایت در حال تعمیر و نگهداری است. لطفاً بعداً مراجعه کنید.',
+          en: 'Site is under maintenance. Please check back later.'
+        },
+        allowedIPs: settings.system?.maintenanceMode?.allowedIPs || []
+      };
+    } catch (error) {
+      logger.error('Get maintenance status error:', error);
       throw error;
     }
   }

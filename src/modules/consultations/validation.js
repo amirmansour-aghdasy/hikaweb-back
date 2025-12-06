@@ -75,6 +75,35 @@ export const createConsultationSchema = Joi.object({
   }).optional()
 });
 
+// Simple consultation form schema for homepage
+export const createSimpleConsultationSchema = Joi.object({
+  phone: Joi.string()
+    .required()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .messages({
+      'any.required': 'شماره موبایل الزامی است',
+      'string.pattern.base': 'شماره موبایل صحیح نیست'
+    }),
+  firstName: Joi.string().required().trim().min(2).max(50).messages({
+    'any.required': 'نام الزامی است',
+    'string.min': 'نام باید حداقل ۲ کاراکتر باشد'
+  }),
+  lastName: Joi.string().required().trim().min(2).max(50).messages({
+    'any.required': 'نام خانوادگی الزامی است',
+    'string.min': 'نام خانوادگی باید حداقل ۲ کاراکتر باشد'
+  }),
+  email: Joi.string().email().lowercase().trim().optional().allow('').messages({
+    'string.email': 'فرمت ایمیل صحیح نیست'
+  }),
+  serviceId: Joi.string()
+    .required()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .messages({
+      'any.required': 'خدمت الزامی است',
+      'string.pattern.base': 'شناسه خدمت نامعتبر است'
+    })
+});
+
 export const updateConsultationSchema = Joi.object({
   requestStatus: Joi.string()
     .valid(

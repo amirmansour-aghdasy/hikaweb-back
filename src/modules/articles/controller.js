@@ -210,14 +210,38 @@ export class ArticleController {
 
       const article = await ArticleService.getArticleBySlug(slug, language);
 
-      // Get related articles
-      const relatedArticles = await ArticleService.getRelatedArticles(article._id);
+      // Get related content in parallel
+      const [relatedArticles, relatedVideos, relatedPortfolios] = await Promise.all([
+        ArticleService.getRelatedArticles(article._id, 5),
+        ArticleService.getRelatedVideos(article._id, 4),
+        ArticleService.getRelatedPortfolios(article._id, 4)
+      ]);
+
+      // Get user rating if available
+      let userRating = null;
+      if (req.userIdentifier) {
+        const { ArticleRatingService } = await import('../articleRatings/service.js');
+        userRating = await ArticleRatingService.getUserRating(article._id, req.userIdentifier);
+      }
+
+      // Get bookmark status if user is authenticated
+      let isBookmarked = false;
+      if (req.user?.id) {
+        const { BookmarkService } = await import('../bookmarks/service.js');
+        isBookmarked = await BookmarkService.isBookmarked(article._id, req.user.id);
+      }
 
       res.json({
         success: true,
         data: {
-          article,
-          relatedArticles
+          article: {
+            ...article.toObject(),
+            userRating,
+            isBookmarked
+          },
+          relatedArticles,
+          relatedVideos,
+          relatedPortfolios
         }
       });
     } catch (error) {
@@ -394,6 +418,20 @@ export class ArticleController {
     try {
       const limit = parseInt(req.query.limit) || 6;
       const articles = await ArticleService.getFeaturedArticles(limit);
+
+      res.json({
+        success: true,
+        data: { articles }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getPopularArticles(req, res, next) {
+    try {
+      const limit = parseInt(req.query.limit) || 5;
+      const articles = await ArticleService.getPopularArticles(limit);
 
       res.json({
         success: true,

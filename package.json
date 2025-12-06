@@ -14,6 +14,7 @@
         "lint:fix": "eslint src/ --fix",
         "format": "prettier --write src/",
         "seed": "node scripts/seed.js",
+        "migrate:services": "node scripts/migrate-services-complete.js",
         "test:endpoints": "node scripts/test-endpoints.js",
         "debug:endpoints": "node scripts/debug-endpoints.js"
     },

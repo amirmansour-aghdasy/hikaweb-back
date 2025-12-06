@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger.js';
 export class TicketService {
   static async createTicket(ticketData, userId) {
     try {
+      // Create ticket with all data including description (required field)
       const ticket = new Ticket({
         ...ticketData,
         customer: userId,
@@ -14,11 +15,26 @@ export class TicketService {
       });
 
       await ticket.save();
+
+      // Add description as first message if provided
+      if (ticketData.description && ticketData.description.trim()) {
+        const firstMessage = {
+          content: ticketData.description.trim(),
+          author: userId,
+          isInternal: false
+        };
+        await ticket.addMessage(firstMessage);
+        await ticket.save(); // Save after adding message
+      }
+
       const populateFields = ['customer'];
       if (ticket.category) {
         populateFields.push('category');
       }
       await ticket.populate(populateFields);
+      
+      // Populate messages author for the first message
+      await ticket.populate('messages.author', 'name avatar');
 
       // Notify admins about new ticket
       await this.notifyNewTicket(ticket);
@@ -233,13 +249,32 @@ export class TicketService {
 
       let query = { deletedAt: null };
 
-      // Role-based filtering
-      const hasAdminAccess =
-        userRole.permissions.includes('tickets.read') || userRole.permissions.includes('admin.all');
-
-      if (!hasAdminAccess) {
-        // Regular users can only see their own tickets
-        query.customer = userId;
+      // ALWAYS filter by user in user panel (even for admins)
+      // This is different from dashboard where admins see all
+      // Dashboard requests typically include 'customer' filter or 'all=true' parameter
+      // User panel requests don't include these - always filter by userId
+      const isDashboardRequest = customer || filters.all === 'true' || filters.all === true;
+      
+      if (userId) {
+        if (!isDashboardRequest) {
+          // User panel: ALWAYS show only user's own tickets (even for admins)
+          query.customer = userId;
+        } else if (isDashboardRequest && userRole) {
+          // Dashboard: admins can see all, regular users see only their own
+          const hasAdminAccess =
+            userRole.permissions?.includes('tickets.read') || 
+            userRole.permissions?.includes('admin.all') ||
+            userRole.name === 'super_admin' ||
+            userRole.name === 'admin';
+          
+          if (!hasAdminAccess) {
+            query.customer = userId;
+          }
+          // If admin and dashboard request, don't filter by customer (show all)
+        } else {
+          // Fallback: if userId exists but no role info, filter by user
+          query.customer = userId;
+        }
       }
 
       // Apply filters

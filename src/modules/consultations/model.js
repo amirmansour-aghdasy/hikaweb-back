@@ -98,6 +98,13 @@ const consultationSchema = new mongoose.Schema(
       default: null
     },
 
+    // Link to user account (if user registered after consultation)
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+
     followUps: [
       {
         date: {
@@ -168,6 +175,7 @@ consultationSchema.index({ email: 1 });
 consultationSchema.index({ phoneNumber: 1 });
 consultationSchema.index({ requestStatus: 1 });
 consultationSchema.index({ assignedTo: 1 });
+consultationSchema.index({ user: 1 });
 consultationSchema.index({ services: 1 });
 consultationSchema.index({ createdAt: -1 });
 consultationSchema.index({ leadSource: 1 });
