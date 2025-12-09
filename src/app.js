@@ -38,6 +38,7 @@ import consultationRoutes from './modules/consultations/routes.js';
 import mediaRoutes from './modules/media/routes.js';
 import settingsRoutes from './modules/settings/routes.js';
 import carouselRoutes from './modules/carousel/routes.js';
+import bannerRoutes from './modules/banners/routes.js';
 import analyticsRoutes from './modules/analytics/routes.js';
 import notificationRoutes from './modules/notifications/routes.js';
 import roleRoutes from './modules/roles/routes.js';
@@ -220,6 +221,7 @@ class App {
     apiRouter.use('/media', mediaRoutes);
     apiRouter.use('/settings', settingsRoutes);
     apiRouter.use('/carousel', carouselRoutes);
+    apiRouter.use('/banners', bannerRoutes);
 
     // Analytics & Notifications
     apiRouter.use('/analytics', analyticsRoutes);
