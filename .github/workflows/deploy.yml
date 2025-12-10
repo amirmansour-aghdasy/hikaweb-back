@@ -1,0 +1,114 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - master
+      - development
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'master'
+
+env:
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+  VPS_USER: ubuntu
+
+jobs:
+  deploy:
+    name: Deploy Backend to Production
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Determine branch
+        id: branch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_OUTPUT
+          else
+            echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync Backend Repository on Server
+        run: |
+          ssh ubuntu@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd ~/hikaweb
+            
+            # Sync backend repository
+            if [ -d back ]; then
+              cd back
+              if [ -d .git ]; then
+                git fetch origin
+                git checkout ${{ steps.branch.outputs.branch }} || git checkout -b ${{ steps.branch.outputs.branch }} origin/${{ steps.branch.outputs.branch }}
+                git reset --hard origin/${{ steps.branch.outputs.branch }}
+                echo "✅ Backend repository synced"
+              else
+                cd ..
+                rm -rf back
+                git clone -b ${{ steps.branch.outputs.branch }} https://github.com/amirmansour-aghdasy/hikaweb-back.git back
+                echo "✅ Backend repository cloned"
+              fi
+            else
+              git clone -b ${{ steps.branch.outputs.branch }} https://github.com/amirmansour-aghdasy/hikaweb-back.git back
+              echo "✅ Backend repository cloned"
+            fi
+          EOF
+
+      - name: Deploy Backend Service
+        run: |
+          ssh ubuntu@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd ~/hikaweb
+            
+            # Make sure deploy script is executable
+            chmod +x scripts/deploy-service.sh || true
+            
+            # Deploy backend
+            ./scripts/deploy-service.sh backend ${{ steps.branch.outputs.branch }}
+          EOF
+
+      - name: Verify Deployment
+        run: |
+          ssh ubuntu@${{ secrets.VPS_HOST }} << 'EOF'
+            echo "🔍 Verifying backend deployment..."
+            sleep 10
+            
+            MAX_ATTEMPTS=30
+            ATTEMPT=1
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+              if curl -f -s http://localhost:5000/health > /dev/null; then
+                echo "✅ Backend health check passed"
+                exit 0
+              fi
+              echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: Waiting for backend..."
+              sleep 2
+              ATTEMPT=$((ATTEMPT + 1))
+            done
+            
+            echo "❌ Backend health check failed"
+            docker-compose logs --tail=50 backend
+            exit 1
+          EOF
+
+      - name: Show Container Status
+        if: always()
+        run: |
+          ssh ubuntu@${{ secrets.VPS_HOST }} << 'EOF'
+            docker-compose ps backend
+          EOF
+
