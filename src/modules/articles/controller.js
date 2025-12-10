@@ -510,4 +510,45 @@ export class ArticleController {
       next(error);
     }
   }
+
+  /**
+   * @swagger
+   * /api/v1/articles/{id}/view:
+   *   post:
+   *     summary: ثبت بازدید منحصر به فرد مقاله
+   *     tags: [Articles]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: بازدید ثبت شد
+   *       404:
+   *         description: مقاله یافت نشد
+   */
+  static async trackView(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userIdentifier = ArticleService.generateUserIdentifier(req);
+      const userId = req.user?.id || null;
+      const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || null;
+      const userAgent = req.headers['user-agent'] || null;
+
+      const result = await ArticleService.trackView(id, userIdentifier, userId, ip, userAgent);
+
+      res.json({
+        success: true,
+        message: result.isNewView ? 'بازدید ثبت شد' : 'بازدید قبلاً ثبت شده است',
+        data: {
+          isNewView: result.isNewView,
+          views: result.views
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

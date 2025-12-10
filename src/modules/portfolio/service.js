@@ -177,6 +177,14 @@ export class PortfolioService {
 
       let query = { deletedAt: null };
 
+      // Filter by status if provided
+      if (filters.status) {
+        query.status = filters.status;
+      } else {
+        // Default to active if not specified
+        query.status = 'active';
+      }
+
       if (search) {
         query.$or = [
           { [`title.${language}`]: new RegExp(search, 'i') },
@@ -225,7 +233,8 @@ export class PortfolioService {
     try {
       const portfolio = await Portfolio.findOne({
         [`slug.${language}`]: slug,
-        deletedAt: null
+        deletedAt: null,
+        status: 'active'
       })
         .populate('services', 'name slug')
         .populate('categories', 'name slug');
@@ -249,7 +258,8 @@ export class PortfolioService {
     try {
       const portfolios = await Portfolio.find({
         isFeatured: true,
-        deletedAt: null
+        deletedAt: null,
+        status: 'active'
       })
         .populate('services', 'name')
         .populate('categories', 'name')
@@ -277,7 +287,8 @@ export class PortfolioService {
           { services: { $in: portfolio.services } },
           { categories: { $in: portfolio.categories } }
         ],
-        deletedAt: null
+        deletedAt: null,
+        status: 'active'
       })
         .populate('services', 'name')
         .sort({ views: -1, 'project.completedAt': -1 })

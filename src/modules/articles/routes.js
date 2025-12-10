@@ -73,6 +73,9 @@ router.delete(
 
 router.post('/:id/like', ArticleController.likeArticle);
 
+// View tracking route (public, no auth required)
+router.post('/:id/view', optionalAuth, ArticleController.trackView);
+
 // Bookmark routes (require auth)
 router.post('/:id/bookmark', authenticate, auditLog('TOGGLE_BOOKMARK', 'bookmarks'), BookmarkController.toggleBookmark);
 router.get('/:id/bookmark/check', authenticate, BookmarkController.checkBookmark);

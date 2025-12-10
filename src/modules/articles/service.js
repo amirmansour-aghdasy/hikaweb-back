@@ -1,8 +1,10 @@
 import { Article } from './model.js';
+import { ArticleView } from './articleViewModel.js';
 import { Category } from '../categories/model.js';
 import { Media } from '../media/model.js';
 import { Portfolio } from '../portfolio/model.js';
 import { logger } from '../../utils/logger.js';
+import crypto from 'crypto';
 
 export class ArticleService {
   static async createArticle(articleData, userId) {
@@ -254,13 +256,73 @@ export class ArticleService {
         throw new Error('مقاله یافت نشد');
       }
 
-      // Increment view count
-      article.views += 1;
-      await article.save();
+      // Don't increment view count here - use trackView endpoint instead
+      // This ensures unique view tracking
 
       return article;
     } catch (error) {
       logger.error('Get article by slug error:', error);
+      throw error;
+    }
+  }
+
+  // Generate user identifier from IP and user agent (same as ArticleRatingService)
+  static generateUserIdentifier(req) {
+    const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    return crypto.createHash('sha256').update(`${ip}-${userAgent}`).digest('hex');
+  }
+
+  // Track unique view for an article
+  static async trackView(articleId, userIdentifier, userId = null, ip = null, userAgent = null) {
+    try {
+      const article = await Article.findById(articleId);
+      if (!article || article.deletedAt) {
+        throw new Error('مقاله یافت نشد');
+      }
+
+      // Check if view already exists
+      const existingView = await ArticleView.findOne({ 
+        article: articleId, 
+        userIdentifier 
+      });
+
+      if (!existingView) {
+        // Create new view record
+        const viewDoc = new ArticleView({
+          article: articleId,
+          userIdentifier,
+          user: userId || null,
+          ip: ip || null,
+          userAgent: userAgent || null
+        });
+        await viewDoc.save();
+
+        // Increment article view count
+        article.views += 1;
+        await article.save();
+
+        return {
+          isNewView: true,
+          views: article.views
+        };
+      }
+
+      // View already exists - return current count
+      return {
+        isNewView: false,
+        views: article.views
+      };
+    } catch (error) {
+      // If duplicate key error (race condition), just return current count
+      if (error.code === 11000) {
+        const article = await Article.findById(articleId);
+        return {
+          isNewView: false,
+          views: article?.views || 0
+        };
+      }
+      logger.error('Track article view error:', error);
       throw error;
     }
   }
