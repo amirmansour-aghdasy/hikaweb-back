@@ -13,7 +13,6 @@ import { HTTP_STATUS } from '../utils/httpStatus.js';
  */
 class ArvanObjectStorageService {
   constructor() {
-    this.baseURL = 'https://hikaweb.s3.ir-thr-at1.arvanstorage.ir';
     this.apiKey = config.ARVAN_OBJECT_STORAGE_API_KEY;
     this.accessKey = config.ARVAN_OBJECT_STORAGE_ACCESS_KEY;
     this.secretKey = config.ARVAN_OBJECT_STORAGE_SECRET_KEY;
@@ -38,10 +37,13 @@ class ArvanObjectStorageService {
     if (customDomain) {
       // Custom domain format: https://custom-domain.com or https://cdn.example.com
       this.s3Endpoint = customDomain.startsWith('http') ? customDomain : `https://${customDomain}`;
+      this.baseURL = this.s3Endpoint;
       logger.info('Using custom domain for Arvan Object Storage:', this.s3Endpoint);
     } else {
       // Default S3 endpoint for direct uploads
       this.s3Endpoint = `https://s3.${this.region}.arvanstorage.ir`;
+      // Base URL for API calls (bucket-specific endpoint)
+      this.baseURL = `https://${this.bucketName}.s3.${this.region}.arvanstorage.ir`;
     }
     
     // Initialize axios instance
