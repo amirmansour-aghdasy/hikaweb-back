@@ -48,6 +48,7 @@ import calendarRoutes from './modules/calendar/routes.js';
 import systemRoutes from './modules/system/routes.js';
 import bookmarkRoutes from './modules/bookmarks/routes.js';
 import articleRatingRoutes from './modules/articleRatings/routes.js';
+import contactMessageRoutes from './modules/contact-messages/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -216,6 +217,7 @@ class App {
     apiRouter.use('/categories', categoryRoutes);
     apiRouter.use('/brands', brandRoutes);
     apiRouter.use('/consultations', consultationRoutes);
+    apiRouter.use('/contact-messages', contactMessageRoutes);
 
     // Media & Settings
     apiRouter.use('/media', mediaRoutes);

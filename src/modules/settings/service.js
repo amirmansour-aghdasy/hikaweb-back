@@ -64,10 +64,12 @@ export class SettingsService {
         Object.keys(source).forEach(key => {
           // Only process defined (non-undefined) values
           if (source[key] !== undefined) {
-            if (
+            // Handle arrays - replace entirely (don't merge arrays)
+            if (Array.isArray(source[key])) {
+              result[key] = source[key];
+            } else if (
               typeof source[key] === 'object' &&
               source[key] !== null &&
-              !Array.isArray(source[key]) &&
               typeof result[key] === 'object' &&
               result[key] !== null &&
               !Array.isArray(result[key])
@@ -87,6 +89,11 @@ export class SettingsService {
 
       // Clean updateData from undefined values
       const cleanedUpdateData = removeUndefined(updateData);
+      
+      // Debug log for whatsapp updates
+      if (cleanedUpdateData.whatsapp) {
+        logger.info('Updating WhatsApp settings:', JSON.stringify(cleanedUpdateData.whatsapp, null, 2));
+      }
 
       // Deep merge nested objects - only update fields that are present in updateData
       Object.keys(cleanedUpdateData).forEach(key => {
@@ -102,18 +109,43 @@ export class SettingsService {
             const merged = deepMerge(settings[key], cleanedUpdateData[key]);
             settings[key] = merged;
             // Mark the nested path as modified so Mongoose knows to save it
+            // For nested objects, we need to mark the full path
             settings.markModified(key);
+            // Also mark nested paths if they exist (e.g., whatsapp.config, whatsapp.agents)
+            if (key === 'whatsapp' && cleanedUpdateData.whatsapp) {
+              if (cleanedUpdateData.whatsapp.config) {
+                settings.markModified('whatsapp.config');
+              }
+              if (cleanedUpdateData.whatsapp.agents) {
+                settings.markModified('whatsapp.agents');
+              }
+            }
           } else {
             settings[key] = cleanedUpdateData[key];
             settings.markModified(key);
           }
+        } else if (Array.isArray(cleanedUpdateData[key])) {
+          // For arrays, replace the entire array (don't merge)
+          settings[key] = cleanedUpdateData[key];
+          settings.markModified(key);
         } else {
           settings[key] = cleanedUpdateData[key];
         }
       });
 
       settings.updatedBy = userId;
+      
+      // Debug log before save
+      if (cleanedUpdateData.whatsapp) {
+        logger.info('WhatsApp settings before save:', JSON.stringify(settings.whatsapp, null, 2));
+      }
+      
       await settings.save();
+      
+      // Debug log after save
+      if (cleanedUpdateData.whatsapp) {
+        logger.info('WhatsApp settings after save:', JSON.stringify(settings.whatsapp, null, 2));
+      }
 
       logger.info(`Settings updated by user ${userId}`);
       return settings;
@@ -142,6 +174,22 @@ export class SettingsService {
         business: {
           companyName: settings.business?.companyName,
           businessHours: settings.business?.businessHours
+        },
+        whatsapp: settings.whatsapp || {
+          enabled: false,
+          agents: [],
+          config: {
+            position: 'bottom-right',
+            showPulse: true,
+            size: 'medium',
+            collectUserInfo: false,
+            showOnPages: [],
+            hideOnPages: [],
+            offlineMode: 'message',
+            language: 'fa',
+            autoCloseTimer: 0,
+            notificationBadge: null
+          }
         },
         maintenanceMode: settings.system?.maintenanceMode || {
           enabled: false,

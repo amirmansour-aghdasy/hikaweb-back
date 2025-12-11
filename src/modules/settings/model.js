@@ -214,6 +214,103 @@ const settingsSchema = new mongoose.Schema(
       ]
     },
 
+    whatsapp: {
+      enabled: {
+        type: Boolean,
+        default: true
+      },
+      agents: [
+        {
+          phoneNumber: {
+            type: String,
+            required: true
+          },
+          name: {
+            type: String,
+            required: true
+          },
+          message: {
+            type: String,
+            default: "سلام، می‌خواهم در مورد خدمات شما اطلاعات بیشتری دریافت کنم."
+          },
+          workingHours: {
+            enabled: {
+              type: Boolean,
+              default: false
+            },
+            timezone: {
+              type: String,
+              default: "Asia/Tehran"
+            },
+            schedule: [
+              {
+                day: {
+                  type: String,
+                  enum: ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+                },
+                isOpen: {
+                  type: Boolean,
+                  default: true
+                },
+                openTime: {
+                  type: String,
+                  default: "09:00"
+                },
+                closeTime: {
+                  type: String,
+                  default: "18:00"
+                }
+              }
+            ]
+          },
+          offlineMessage: {
+            type: String,
+            default: "متأسفانه در حال حاضر خارج از ساعات کاری هستیم. لطفاً پیام خود را ارسال کنید تا در اولین فرصت با شما تماس بگیریم."
+          }
+        }
+      ],
+      config: {
+        position: {
+          type: String,
+          enum: ['bottom-right', 'bottom-left'],
+          default: 'bottom-right'
+        },
+        showPulse: {
+          type: Boolean,
+          default: true
+        },
+        size: {
+          type: String,
+          enum: ['small', 'medium', 'large'],
+          default: 'medium'
+        },
+        collectUserInfo: {
+          type: Boolean,
+          default: false
+        },
+        showOnPages: [String],
+        hideOnPages: [String],
+        offlineMode: {
+          type: String,
+          enum: ['message', 'hide', 'button'],
+          default: 'message'
+        },
+        language: {
+          type: String,
+          enum: ['fa', 'en'],
+          default: 'fa'
+        },
+        autoCloseTimer: {
+          type: Number,
+          default: 0
+        },
+        notificationBadge: {
+          type: Number,
+          default: null
+        }
+      }
+    },
+
     ...baseSchemaFields
   },
   {

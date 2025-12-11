@@ -92,6 +92,36 @@ export class ConsultationController {
    *       200:
    *         description: لیست درخواست‌ها دریافت شد
    */
+  /**
+   * Get consultations for the authenticated user (regular users)
+   */
+  static async getMyConsultations(req, res, next) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      const userId = req.user.id;
+      // Get user with role populated
+      const User = (await import('../auth/model.js')).User;
+      const user = await User.findById(userId).populate('role');
+      const userRole = user?.role || null;
+
+      // For regular users, always filter by user
+      const result = await ConsultationService.getConsultations(req.query, userId, userRole, false);
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getConsultations(req, res, next) {
     try {
       // Get user info if authenticated

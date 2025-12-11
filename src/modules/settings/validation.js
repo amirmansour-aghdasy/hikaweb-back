@@ -78,5 +78,41 @@ export const updateSettingsSchema = Joi.object({
     registrationEnabled: Joi.boolean(),
     defaultLanguage: Joi.string().valid('fa', 'en'),
     maxFileSize: Joi.number().min(1)
+  }).optional(),
+
+  whatsapp: Joi.object({
+    enabled: Joi.boolean().optional(),
+    agents: Joi.array().items(
+      Joi.object({
+        phoneNumber: Joi.string().required(),
+        name: Joi.string().required(),
+        message: Joi.string().allow('').optional(),
+        workingHours: Joi.object({
+          enabled: Joi.boolean().optional(),
+          timezone: Joi.string().optional(),
+          schedule: Joi.array().items(
+            Joi.object({
+              day: Joi.string().valid('saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday').required(),
+              isOpen: Joi.boolean().optional(),
+              openTime: Joi.string().allow('').optional(),
+              closeTime: Joi.string().allow('').optional()
+            })
+          ).optional()
+        }).optional(),
+        offlineMessage: Joi.string().allow('').optional()
+      })
+    ).optional(),
+    config: Joi.object({
+      position: Joi.string().valid('bottom-right', 'bottom-left').optional(),
+      showPulse: Joi.boolean().optional(),
+      size: Joi.string().valid('small', 'medium', 'large').optional(),
+      collectUserInfo: Joi.boolean().optional(),
+      showOnPages: Joi.array().items(Joi.string()).optional(),
+      hideOnPages: Joi.array().items(Joi.string()).optional(),
+      offlineMode: Joi.string().valid('message', 'hide', 'button').optional(),
+      language: Joi.string().valid('fa', 'en').optional(),
+      autoCloseTimer: Joi.number().min(0).optional(),
+      notificationBadge: Joi.number().min(0).allow(null).optional()
+    }).optional()
   }).optional()
 });

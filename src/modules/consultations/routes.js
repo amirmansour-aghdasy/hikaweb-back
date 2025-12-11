@@ -29,6 +29,10 @@ router.post(
 // Protected routes
 router.use(authenticate);
 
+// Route for regular users to get their own consultations (no authorization required)
+router.get('/my', ConsultationController.getMyConsultations);
+
+// Route for admins to get all consultations (requires authorization)
 router.get('/', authorize(['consultations.read']), ConsultationController.getConsultations);
 
 router.get('/:id', authorize(['consultations.read']), ConsultationController.getConsultationById);

@@ -18,10 +18,31 @@ class ArvanObjectStorageService {
     this.accessKey = config.ARVAN_OBJECT_STORAGE_ACCESS_KEY;
     this.secretKey = config.ARVAN_OBJECT_STORAGE_SECRET_KEY;
     this.bucketName = config.ARVAN_OBJECT_STORAGE_BUCKET;
-    this.region = config.ARVAN_OBJECT_STORAGE_REGION;
+    this.region = config.ARVAN_OBJECT_STORAGE_REGION || 'ir-thr-at1';
     
-    // S3 endpoint for direct uploads
-    this.s3Endpoint = `https://s3.${this.region}.arvanstorage.ir`;
+    // SECURITY: Validate credentials on initialization
+    if (!this.accessKey || !this.secretKey) {
+      logger.error('Arvan Object Storage credentials are missing!', {
+        hasAccessKey: !!this.accessKey,
+        hasSecretKey: !!this.secretKey,
+        hasApiKey: !!this.apiKey,
+        hasBucket: !!this.bucketName,
+        region: this.region
+      });
+      throw new Error('Arvan Object Storage credentials are not configured. Please set ARVAN_OBJECT_STORAGE_ACCESS_KEY and ARVAN_OBJECT_STORAGE_SECRET_KEY environment variables.');
+    }
+    
+    // Support custom domain if configured
+    // If custom domain is set, use it; otherwise use default Arvan endpoint
+    const customDomain = config.ARVAN_OBJECT_STORAGE_CUSTOM_DOMAIN;
+    if (customDomain) {
+      // Custom domain format: https://custom-domain.com or https://cdn.example.com
+      this.s3Endpoint = customDomain.startsWith('http') ? customDomain : `https://${customDomain}`;
+      logger.info('Using custom domain for Arvan Object Storage:', this.s3Endpoint);
+    } else {
+      // Default S3 endpoint for direct uploads
+      this.s3Endpoint = `https://s3.${this.region}.arvanstorage.ir`;
+    }
     
     // Initialize axios instance
     this.api = axios.create({
@@ -38,15 +59,39 @@ class ArvanObjectStorageService {
    */
   getS3Client(region = null) {
     const targetRegion = region || this.region;
-    const endpoint = `https://s3.${targetRegion}.arvanstorage.ir`;
+    
+    // Use custom domain if configured, otherwise use default endpoint
+    const customDomain = config.ARVAN_OBJECT_STORAGE_CUSTOM_DOMAIN;
+    let endpoint;
+    if (customDomain) {
+      // For custom domain, we still need to use the S3 endpoint for API calls
+      // Custom domain is only for public URLs, not for S3 API
+      endpoint = `https://s3.${targetRegion}.arvanstorage.ir`;
+    } else {
+      endpoint = `https://s3.${targetRegion}.arvanstorage.ir`;
+    }
+    
+    // SECURITY: Validate credentials before creating client
+    if (!this.accessKey || !this.secretKey) {
+      const error = new Error('Arvan Object Storage credentials are missing');
+      error.name = 'MissingCredentials';
+      throw error;
+    }
+    
+    // Validate credentials format (should not be empty strings)
+    if (this.accessKey.trim() === '' || this.secretKey.trim() === '') {
+      const error = new Error('Arvan Object Storage credentials are empty');
+      error.name = 'EmptyCredentials';
+      throw error;
+    }
     
     return new S3Client({
       endpoint: endpoint,
       region: targetRegion,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: this.accessKey,
-        secretAccessKey: this.secretKey
+        accessKeyId: this.accessKey.trim(),
+        secretAccessKey: this.secretKey.trim()
       }
     });
   }
@@ -288,11 +333,24 @@ class ArvanObjectStorageService {
       const result = await upload.done();
       
       // Construct public URL
-      // Arvan supports both path-style and virtual-hosted-style URLs
-      // For public files, use virtual-hosted-style: https://bucket-name.s3.region.arvanstorage.ir/key
-      // For path-style (with forcePathStyle): https://s3.region.arvanstorage.ir/bucket-name/key
-      // Since we use forcePathStyle: true, we use path-style format
-      const publicUrl = result.Location || `${endpoint}/${targetBucket}/${cleanKey}`;
+      // If custom domain is configured, use it for public URLs
+      // Otherwise use default Arvan endpoint
+      const customDomain = config.ARVAN_OBJECT_STORAGE_CUSTOM_DOMAIN;
+      let publicUrl;
+      
+      if (customDomain) {
+        // Custom domain format: https://cdn.example.com or https://custom-domain.com
+        const domain = customDomain.startsWith('http') ? customDomain : `https://${customDomain}`;
+        // Remove trailing slash if exists
+        const cleanDomain = domain.replace(/\/$/, '');
+        // Construct URL with custom domain
+        publicUrl = `${cleanDomain}/${cleanKey}`;
+        logger.info(`Using custom domain for public URL: ${publicUrl}`);
+      } else {
+        // Default: Use path-style URL (since we use forcePathStyle: true)
+        // Format: https://s3.region.arvanstorage.ir/bucket-name/key
+        publicUrl = result.Location || `${endpoint}/${targetBucket}/${cleanKey}`;
+      }
 
       logger.info(`File uploaded: ${cleanKey} to bucket ${targetBucket} (${(buffer.length / 1024).toFixed(2)} KB)`);
       

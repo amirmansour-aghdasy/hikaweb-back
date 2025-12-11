@@ -31,25 +31,83 @@ export class BookmarkService {
 
   static async getUserBookmarks(userId, filters = {}) {
     try {
-      const { page = 1, limit = 25 } = filters;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const { page = 1, limit = 25, search = '' } = filters;
+      const parsedPage = parseInt(page);
+      const parsedLimit = parseInt(limit);
+      const skip = (parsedPage - 1) * parsedLimit;
 
-      const [bookmarks, total] = await Promise.all([
-        Bookmark.find({ user: userId, deletedAt: null })
-          .populate('article', 'title slug featuredImage excerpt publishedAt readTime views')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit)),
-        Bookmark.countDocuments({ user: userId, deletedAt: null })
-      ]);
+      // Build query
+      let bookmarkQuery = { user: userId, deletedAt: null };
+      
+      // Handle search - search in article title and excerpt
+      let articleQuery = {};
+      if (search) {
+        articleQuery = {
+          $or: [
+            { 'title.fa': new RegExp(search, 'i') },
+            { 'title.en': new RegExp(search, 'i') },
+            { title: new RegExp(search, 'i') }, // Fallback for non-multilingual titles
+            { 'excerpt.fa': new RegExp(search, 'i') },
+            { 'excerpt.en': new RegExp(search, 'i') },
+            { excerpt: new RegExp(search, 'i') }, // Fallback for non-multilingual excerpts
+            { 'shortDescription.fa': new RegExp(search, 'i') },
+            { 'shortDescription.en': new RegExp(search, 'i') },
+            { shortDescription: new RegExp(search, 'i') }
+          ]
+        };
+      }
+
+      // First, find bookmarks
+      let bookmarksQuery = Bookmark.find(bookmarkQuery)
+        .populate({
+          path: 'article',
+          select: 'title slug featuredImage excerpt publishedAt readTime views shortDescription',
+          match: search ? articleQuery : {}
+        })
+        .sort({ createdAt: -1 });
+
+      // If search is provided, we need to filter after population
+      // This is less efficient but necessary for searching in populated fields
+      let bookmarks = await bookmarksQuery.exec();
+      
+      // Filter out bookmarks with null articles (from populate match) and apply search filter
+      bookmarks = bookmarks.filter(b => {
+        if (!b.article) return false;
+        if (!search) return true;
+        
+        // Additional client-side filtering for search (populate match might not catch all cases)
+        const title = b.article.title?.fa || b.article.title?.en || b.article.title || '';
+        const excerpt = b.article.excerpt?.fa || b.article.excerpt?.en || b.article.excerpt || '';
+        const shortDesc = b.article.shortDescription?.fa || b.article.shortDescription?.en || b.article.shortDescription || '';
+        const searchLower = search.toLowerCase();
+        
+        return title.toLowerCase().includes(searchLower) ||
+               excerpt.toLowerCase().includes(searchLower) ||
+               shortDesc.toLowerCase().includes(searchLower);
+      });
+
+      // Get total count (for pagination)
+      const total = search 
+        ? bookmarks.length // If searching, total is filtered results
+        : await Bookmark.countDocuments(bookmarkQuery);
+
+      // Apply pagination
+      const paginatedBookmarks = bookmarks.slice(skip, skip + parsedLimit);
+      
+      // Extract articles from bookmarks
+      const articles = paginatedBookmarks.map(b => b.article).filter(Boolean);
+      
+      const totalPages = Math.ceil((search ? bookmarks.length : total) / parsedLimit);
 
       return {
-        data: bookmarks.map(b => b.article).filter(Boolean),
+        data: articles,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          totalPages: Math.ceil(total / parseInt(limit))
+          page: parsedPage,
+          limit: parsedLimit,
+          total: search ? bookmarks.length : total,
+          totalPages,
+          hasNext: parsedPage < totalPages,
+          hasPrev: parsedPage > 1
         }
       };
     } catch (error) {

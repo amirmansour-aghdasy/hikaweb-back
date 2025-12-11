@@ -1,12 +1,14 @@
 import path from 'path';
-
+import crypto from 'crypto';
 import multer from 'multer';
 
 import { Media } from './model.js';
 import { Bucket } from './bucketModel.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/environment.js';
-import { FileProcessor } from '../../utils/fileProcessor.js';
+import { AppError } from '../../utils/appError.js';
+import { HTTP_STATUS } from '../../utils/httpStatus.js';
+// FileProcessor no longer needed - we only get dimensions, no variants
 import { arvanObjectStorageService } from '../../services/arvanObjectStorage.js';
 
 export class MediaService {
@@ -73,8 +75,23 @@ export class MediaService {
         }
       }
 
-      const fileType = FileProcessor.getFileTypeCategory(file.mimetype);
-      const uniqueFilename = FileProcessor.generateUniqueFilename(file.originalname);
+      // Get file type category (inline function - no need for FileProcessor)
+      const getFileTypeCategory = (mimeType) => {
+        if (mimeType.startsWith('image/')) return 'image';
+        if (mimeType.startsWith('video/')) return 'video';
+        if (mimeType.startsWith('audio/')) return 'audio';
+        if (mimeType.includes('pdf') || mimeType.includes('document')) return 'document';
+        return 'other';
+      };
+      
+      // Generate unique filename (inline function - no need for FileProcessor)
+      const generateUniqueFilename = (originalName) => {
+        const ext = path.extname(originalName);
+        return `${Date.now()}-${crypto.randomUUID()}${ext}`;
+      };
+      
+      const fileType = getFileTypeCategory(file.mimetype);
+      const uniqueFilename = generateUniqueFilename(file.originalname);
       const folder = metadata.folder || '/';
       // Remove leading slash from folder and ensure key doesn't start with /
       const cleanFolder = folder.replace(/^\/+/, '').replace(/\/+$/, '');
@@ -83,15 +100,17 @@ export class MediaService {
       let dimensions = null;
       let variants = [];
 
-      // Process images
+      // Process images - Only get dimensions, no variants
       if (fileType === 'image') {
-        const processed = await FileProcessor.processImage(file.buffer);
+        // Use sharp to get metadata only (no processing/resizing)
+        const sharp = (await import('sharp')).default;
+        const metadata = await sharp(file.buffer).metadata();
         dimensions = {
-          width: processed.originalMetadata.width,
-          height: processed.originalMetadata.height
+          width: metadata.width,
+          height: metadata.height
         };
 
-        // Upload original
+        // Upload original only - no variants
         // Use actual Arvan bucket name from config, not MongoDB bucket name
         const arvanBucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
         const arvanRegion = bucket.region || config.ARVAN_OBJECT_STORAGE_REGION || config.ARVAN_DRIVE_REGION || 'ir-thr-at1';
@@ -108,34 +127,15 @@ export class MediaService {
           arvanRegion
         );
 
-        // Upload variants
-        for (const [sizeName, variant] of Object.entries(processed.variants)) {
-          // Ensure variant key doesn't start with / and uses same folder structure
-          const variantKey = key.replace(path.extname(key), `-${sizeName}.webp`);
-          const variantUrl = await arvanObjectStorageService.uploadFile(
-            variant.buffer,
-            variantKey,
-            'image/webp',
-            { type: 'variant', size: sizeName, isPublic: bucket.isPublic !== false },
-            arvanBucketName,
-            arvanRegion
-          );
-
-          variants.push({
-            size: sizeName,
-            url: variantUrl.url,
-            width: variant.width,
-            height: variant.height,
-            fileSize: variant.size
-          });
-        }
+        // No variants - empty array
+        variants = [];
 
         // Create media record
         const mediaRecord = new Media({
           filename: uniqueFilename,
           originalName: file.originalname,
           url: originalUrl.url,
-          thumbnailUrl: variants.find(v => v.size === 'thumbnail')?.url,
+          thumbnailUrl: originalUrl.url, // Use original as thumbnail since no variants
           mimeType: file.mimetype,
           fileType,
           size: file.size,
@@ -143,7 +143,7 @@ export class MediaService {
           uploadedBy: user.id,
           bucket: bucket._id,
           folder,
-          variants,
+          variants, // Empty array - no variants
           ...metadata
         });
 
@@ -205,7 +205,22 @@ export class MediaService {
       }
 
       if (media.usageCount > 0) {
-        throw new Error('فایل در حال استفاده است و قابل حذف نیست');
+        // Build detailed error message with usage information
+        const usageDetails = media.usedIn.map(usage => {
+          const resourceTypeMap = {
+            'Article': 'مقاله',
+            'Service': 'خدمت',
+            'Portfolio': 'نمونه کار',
+            'TeamMember': 'عضو تیم',
+            'Brand': 'برند',
+            'Carousel': 'اسلایدر'
+          };
+          const resourceTypeLabel = resourceTypeMap[usage.resourceType] || usage.resourceType;
+          return `${resourceTypeLabel} (${usage.field || 'فیلد نامشخص'})`;
+        }).join('، ');
+        
+        const errorMessage = `فایل "${media.originalName}" در حال استفاده است و قابل حذف نیست. این فایل در موارد زیر استفاده شده: ${usageDetails}`;
+        throw AppError.conflict(errorMessage);
       }
 
       // Extract key from URL
@@ -534,9 +549,22 @@ export class MediaService {
 
       // If a new file is uploaded (edited image from frontend)
       if (editOptions.file) {
-        // Process the edited image
-        const fileType = FileProcessor.getFileTypeCategory(editOptions.file.mimetype);
-        const uniqueFilename = FileProcessor.generateUniqueFilename(editOptions.file.originalname || `edited-${media.filename}`);
+        // Process the edited image - use inline functions (no FileProcessor needed)
+        const getFileTypeCategory = (mimeType) => {
+          if (mimeType.startsWith('image/')) return 'image';
+          if (mimeType.startsWith('video/')) return 'video';
+          if (mimeType.startsWith('audio/')) return 'audio';
+          if (mimeType.includes('pdf') || mimeType.includes('document')) return 'document';
+          return 'other';
+        };
+        
+        const generateUniqueFilename = (originalName) => {
+          const ext = path.extname(originalName);
+          return `${Date.now()}-${crypto.randomUUID()}${ext}`;
+        };
+        
+        const fileType = getFileTypeCategory(editOptions.file.mimetype);
+        const uniqueFilename = generateUniqueFilename(editOptions.file.originalname || `edited-${media.filename}`);
         const folder = media.folder || '/';
         const key = `${folder}${uniqueFilename}`.replace('//', '/');
 
