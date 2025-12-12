@@ -55,6 +55,15 @@ const articleSchema = new mongoose.Schema({
     metaKeywords: { fa: [String], en: [String] },
     ogImage: String
   },
+  downloadBox: {
+    title: { fa: String, en: String },
+    description: { fa: String, en: String },
+    fileUrl: String,
+    fileName: String,
+    fileSize: Number,
+    fileType: String,
+    isActive: { type: Boolean, default: false }
+  },
   ...baseSchemaFields
 }, {
   timestamps: true,
@@ -72,9 +81,21 @@ Object.assign(articleSchema.methods, baseSchemaMethods);
 Object.assign(articleSchema.statics, baseSchemaStatics);
 
 articleSchema.methods.calculateReadTime = function() {
-  const wordsPerMinute = 200;
-  const totalWords = (this.content.fa + ' ' + this.content.en).split(' ').length;
-  this.readTime = Math.ceil(totalWords / wordsPerMinute);
+  // For Persian/Farsi content, use 150 words per minute (slower reading speed)
+  // For English content, use 200 words per minute (standard reading speed)
+  const persianWordsPerMinute = 150;
+  const englishWordsPerMinute = 200;
+  
+  // Count words in each language
+  const persianWords = (this.content.fa || '').trim().split(/\s+/).filter(w => w.length > 0).length;
+  const englishWords = (this.content.en || '').trim().split(/\s+/).filter(w => w.length > 0).length;
+  
+  // Calculate read time for each language
+  const persianTime = persianWords > 0 ? Math.ceil(persianWords / persianWordsPerMinute) : 0;
+  const englishTime = englishWords > 0 ? Math.ceil(englishWords / englishWordsPerMinute) : 0;
+  
+  // Total read time (sum of both languages)
+  this.readTime = Math.max(1, persianTime + englishTime); // Minimum 1 minute
   return this.readTime;
 };
 

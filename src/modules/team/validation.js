@@ -7,7 +7,7 @@ export const createTeamMemberSchema = Joi.object({
   }).required(),
 
   slug: Joi.string()
-    .pattern(/^[a-z0-9-]+$/)
+    .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/) // Allow Persian characters, English letters, numbers, and dashes
     .required(),
 
   position: Joi.object({

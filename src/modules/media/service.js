@@ -102,23 +102,55 @@ export class MediaService {
 
       // Process images - Only get dimensions, no variants
       if (fileType === 'image') {
-        // Use sharp to get metadata only (no processing/resizing)
+        // Use sharp to get metadata and optionally convert to WebP
         const sharp = (await import('sharp')).default;
-        const metadata = await sharp(file.buffer).metadata();
+        const imageMetadata = await sharp(file.buffer).metadata();
         dimensions = {
-          width: metadata.width,
-          height: metadata.height
+          width: imageMetadata.width,
+          height: imageMetadata.height
         };
 
-        // Upload original only - no variants
+        let processedBuffer = file.buffer;
+        let finalMimeType = file.mimetype;
+        let finalKey = key;
+
+        // Convert to WebP if optimizeForWeb is true and image is not already WebP
+        // Skip conversion for images that need transparency (PNG with alpha channel, GIF)
+        if (metadata.optimizeForWeb && 
+            file.mimetype !== 'image/webp' && 
+            !(file.mimetype === 'image/png' && imageMetadata.hasAlpha) &&
+            file.mimetype !== 'image/gif') {
+          try {
+            // Convert to WebP with high quality (90%) to maintain quality while reducing size
+            processedBuffer = await sharp(file.buffer)
+              .webp({ 
+                quality: 90,
+                effort: 6 // Higher effort = better compression but slower
+              })
+              .toBuffer();
+            
+            // Update mime type and filename
+            finalMimeType = 'image/webp';
+            const ext = path.extname(key);
+            finalKey = key.replace(ext, '.webp');
+            
+            logger.info(`Image converted to WebP: ${file.originalname} -> ${finalKey}`);
+          } catch (conversionError) {
+            // If conversion fails, use original image
+            logger.warn(`WebP conversion failed for ${file.originalname}, using original:`, conversionError);
+            processedBuffer = file.buffer;
+          }
+        }
+
+        // Upload processed image
         // Use actual Arvan bucket name from config, not MongoDB bucket name
         const arvanBucketName = config.ARVAN_OBJECT_STORAGE_BUCKET || config.ARVAN_DRIVE_BUCKET;
         const arvanRegion = bucket.region || config.ARVAN_OBJECT_STORAGE_REGION || config.ARVAN_DRIVE_REGION || 'ir-thr-at1';
         
         const originalUrl = await arvanObjectStorageService.uploadFile(
-          file.buffer, 
-          key, 
-          file.mimetype, 
+          processedBuffer, 
+          finalKey, 
+          finalMimeType, 
           {
             type: 'original',
             isPublic: bucket.isPublic !== false // Default to true (public-read) unless explicitly set to false
@@ -132,13 +164,13 @@ export class MediaService {
 
         // Create media record
         const mediaRecord = new Media({
-          filename: uniqueFilename,
+          filename: path.basename(finalKey), // Use final key (might be .webp)
           originalName: file.originalname,
           url: originalUrl.url,
           thumbnailUrl: originalUrl.url, // Use original as thumbnail since no variants
-          mimeType: file.mimetype,
+          mimeType: finalMimeType, // Use final mime type (might be webp)
           fileType,
-          size: file.size,
+          size: processedBuffer.length, // Use processed buffer size
           dimensions,
           uploadedBy: user.id,
           bucket: bucket._id,

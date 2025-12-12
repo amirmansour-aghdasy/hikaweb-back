@@ -71,7 +71,7 @@ router.delete(
   ArticleController.deleteArticle
 );
 
-router.post('/:id/like', ArticleController.likeArticle);
+router.post('/:id/like', authenticate, ArticleController.likeArticle);
 
 // View tracking route (public, no auth required)
 router.post('/:id/view', optionalAuth, ArticleController.trackView);

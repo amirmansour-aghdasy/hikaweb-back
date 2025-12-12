@@ -18,7 +18,9 @@ export const csrfProtection = async (req, res, next) => {
     '/api/v1/auth/login',
     '/api/v1/auth/otp',
     '/api/v1/consultations',
-    '/api/v1/health'
+    '/api/v1/health',
+    '/api/v1/articles', // Article view tracking and ratings are public
+    '/api/v1/team/public' // Public team members endpoint
   ];
 
   const isPublicPath = publicPaths.some(path => req.path.startsWith(path));

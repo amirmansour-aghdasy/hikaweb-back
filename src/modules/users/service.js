@@ -22,6 +22,18 @@ export class UserService {
         if (!role) {
           throw new Error('نقش انتخابی نامعتبر است');
         }
+        
+        // Prevent creating more than one super_admin
+        if (role.name === 'super_admin') {
+          const existingSuperAdmin = await User.findOne({
+            role: role._id,
+            deletedAt: null
+          }).populate('role');
+          
+          if (existingSuperAdmin) {
+            throw new Error('فقط یک کاربر می‌تواند نقش مدیر کل داشته باشد');
+          }
+        }
       }
 
       const user = new User({
@@ -70,6 +82,19 @@ export class UserService {
         if (!role) {
           throw new Error('نقش انتخابی نامعتبر است');
         }
+        
+        // Prevent assigning super_admin role if another user already has it
+        if (role.name === 'super_admin') {
+          const existingSuperAdmin = await User.findOne({
+            _id: { $ne: userId },
+            role: role._id,
+            deletedAt: null
+          }).populate('role');
+          
+          if (existingSuperAdmin) {
+            throw new Error('فقط یک کاربر می‌تواند نقش مدیر کل داشته باشد');
+          }
+        }
       }
 
       Object.assign(user, updateData);
@@ -94,10 +119,18 @@ export class UserService {
         throw new Error('کاربر یافت نشد');
       }
 
-      // Prevent deletion of system admin
+      // Allow deletion of super_admin if there are multiple
+      // But prevent deletion if it's the only super_admin
       const role = await Role.findById(user.role);
       if (role && role.name === 'super_admin') {
-        throw new Error('حذف مدیر کل امکان‌پذیر نیست');
+        const superAdminCount = await User.countDocuments({
+          role: role._id,
+          deletedAt: null
+        });
+        
+        if (superAdminCount <= 1) {
+          throw new Error('حداقل یک کاربر با نقش مدیر کل باید وجود داشته باشد');
+        }
       }
 
       await user.softDelete();

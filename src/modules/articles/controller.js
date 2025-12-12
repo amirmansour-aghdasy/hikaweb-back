@@ -498,15 +498,80 @@ export class ArticleController {
         });
       }
 
-      article.likes += 1;
+      // Get user identifier (user ID if logged in, or IP address)
+      const userId = req.user?.id || null;
+      const userIdentifier = userId || req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'anonymous';
+
+      // Import ArticleLike model
+      const { ArticleLike } = await import('./articleLikeModel.js');
+
+      // Check if user already liked this article
+      const existingLike = await ArticleLike.findOne({
+        article: article._id,
+        $or: [
+          userId ? { user: userId } : {},
+          { userIdentifier: userIdentifier }
+        ]
+      });
+
+      let isLiked = false;
+      let newLikesCount = article.likes;
+
+      if (existingLike) {
+        // User already liked - remove the like (unlike)
+        await ArticleLike.deleteOne({ _id: existingLike._id });
+        newLikesCount = Math.max(0, article.likes - 1);
+        isLiked = false;
+      } else {
+        // User hasn't liked - add the like
+        await ArticleLike.create({
+          article: article._id,
+          user: userId,
+          userIdentifier: userIdentifier
+        });
+        newLikesCount = article.likes + 1;
+        isLiked = true;
+      }
+
+      // Update article likes count
+      article.likes = newLikesCount;
       await article.save();
 
       res.json({
         success: true,
-        message: 'مقاله لایک شد',
-        data: { likes: article.likes }
+        message: isLiked ? 'مقاله لایک شد' : 'لایک شما برداشته شد',
+        data: { 
+          likes: newLikesCount,
+          isLiked: isLiked
+        }
       });
     } catch (error) {
+      // Handle duplicate key error (race condition)
+      if (error.code === 11000) {
+        // Like already exists or was just created - fetch current state
+        const { ArticleLike } = await import('./articleLikeModel.js');
+        const userId = req.user?.id || null;
+        const userIdentifier = userId || req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'anonymous';
+        
+        const existingLike = await ArticleLike.findOne({
+          article: req.params.id,
+          $or: [
+            userId ? { user: userId } : {},
+            { userIdentifier: userIdentifier }
+          ]
+        });
+
+        const article = await Article.findById(req.params.id);
+        
+        return res.json({
+          success: true,
+          message: existingLike ? 'مقاله لایک شد' : 'لایک شما برداشته شد',
+          data: { 
+            likes: article.likes,
+            isLiked: !!existingLike
+          }
+        });
+      }
       next(error);
     }
   }

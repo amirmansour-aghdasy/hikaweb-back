@@ -57,7 +57,8 @@ export class MediaController {
         altText: {
           fa: req.body.altText_fa || '',
           en: req.body.altText_en || ''
-        }
+        },
+        optimizeForWeb: req.body.optimizeForWeb === 'true' || req.body.optimizeForWeb === true
       };
 
       const media = await MediaService.uploadFile(req.file, req.user, metadata);

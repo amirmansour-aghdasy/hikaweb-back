@@ -13,12 +13,19 @@ export const createCategorySchema = Joi.object({
   slug: Joi.object({
     fa: Joi.string()
       .required()
-      .lowercase()
-      .pattern(/^[a-z0-9-]+$/),
+      .trim()
+      .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/)
+      .messages({
+        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف فارسی، حروف انگلیسی کوچک، اعداد و خط تیره باشد'
+      }),
     en: Joi.string()
       .required()
+      .trim()
       .lowercase()
       .pattern(/^[a-z0-9-]+$/)
+      .messages({
+        'string.pattern.base': 'آدرس یکتا انگلیسی فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد'
+      })
   }).required(),
 
   description: Joi.object({

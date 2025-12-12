@@ -17,10 +17,9 @@ export const createArticleSchema = Joi.object({
     fa: Joi.string()
       .required()
       .trim()
-      .lowercase()
-      .pattern(/^[a-z0-9-]+$/)
+      .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/)
       .messages({
-        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد',
+        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف فارسی، حروف انگلیسی کوچک، اعداد و خط تیره باشد',
         'any.required': 'آدرس یکتا فارسی الزامی است'
       }),
     en: Joi.string()
@@ -89,6 +88,22 @@ export const createArticleSchema = Joi.object({
       fa: Joi.array().items(Joi.string()),
       en: Joi.array().items(Joi.string())
     }).optional()
+  }).optional(),
+
+  downloadBox: Joi.object({
+    title: Joi.object({
+      fa: Joi.string().allow('').max(200),
+      en: Joi.string().allow('').max(200)
+    }).optional(),
+    description: Joi.object({
+      fa: Joi.string().allow('').max(500),
+      en: Joi.string().allow('').max(500)
+    }).optional(),
+    fileUrl: Joi.string().uri().allow('').optional(),
+    fileName: Joi.string().allow('').optional(),
+    fileSize: Joi.number().min(0).optional(),
+    fileType: Joi.string().allow('').optional(),
+    isActive: Joi.boolean().default(false)
   }).optional()
 });
 

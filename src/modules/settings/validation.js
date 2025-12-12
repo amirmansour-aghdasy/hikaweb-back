@@ -7,8 +7,8 @@ export const updateSettingsSchema = Joi.object({
   }).optional(),
 
   siteDescription: Joi.object({
-    fa: Joi.string().trim(),
-    en: Joi.string().trim()
+    fa: Joi.string().trim().allow(''),
+    en: Joi.string().trim().allow('')
   }).optional(),
 
   logo: Joi.object({
