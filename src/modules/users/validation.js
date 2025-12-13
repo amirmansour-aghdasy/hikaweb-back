@@ -40,7 +40,11 @@ export const createUserSchema = Joi.object({
 
   isEmailVerified: Joi.boolean().optional(),
 
-  isPhoneNumberVerified: Joi.boolean().optional()
+  isPhoneNumberVerified: Joi.boolean().optional(),
+
+  avatar: Joi.string().allow(null, '').optional(),
+
+  bio: Joi.string().max(500).allow(null, '').optional()
 });
 
 export const updateUserSchema = createUserSchema.fork(

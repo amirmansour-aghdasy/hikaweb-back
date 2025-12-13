@@ -49,6 +49,8 @@ export const createCategorySchema = Joi.object({
   orderIndex: Joi.number().default(0)
 });
 
-export const updateCategorySchema = createCategorySchema.fork(['name', 'slug', 'type'], schema =>
-  schema.optional()
-);
+export const updateCategorySchema = createCategorySchema
+  .fork(['name', 'slug', 'type'], schema => schema.optional())
+  .keys({
+    status: Joi.string().valid('active', 'inactive', 'archived').optional()
+  });

@@ -1,5 +1,8 @@
 import { Category } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { Article } from '../articles/model.js';
+import { Service } from '../services/model.js';
+import { Portfolio } from '../portfolio/model.js';
 
 export class CategoryService {
   static async createCategory(categoryData, userId) {
@@ -64,10 +67,26 @@ export class CategoryService {
         }
       }
 
-      Object.assign(category, updateData);
+      // Update fields explicitly to ensure Mongoose tracks changes
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] !== undefined) {
+          category.set(key, updateData[key]);
+        }
+      });
+      
       category.updatedBy = userId;
 
+      // Log before save for debugging
+      logger.info(`Category before save - status: ${category.status}, updateData: ${JSON.stringify(updateData)}`);
+
       await category.save();
+
+      // Log after save for debugging
+      logger.info(`Category after save - status: ${category.status}`);
+
+      // Populate related fields before returning
+      await category.populate('parent', 'name');
+      await category.populate('children', 'name');
 
       logger.info(`Category updated: ${category.name.fa} by user ${userId}`);
       return category;
@@ -172,8 +191,76 @@ export class CategoryService {
         Category.countDocuments(query)
       ]);
 
+      // Calculate statistics for each category
+      // Group categories by type for batch counting
+      const categoriesByType = {
+        article: [],
+        service: [],
+        portfolio: [],
+        faq: []
+      };
+
+      categories.forEach(category => {
+        const type = category.type || 'article';
+        if (categoriesByType[type]) {
+          categoriesByType[type].push(category._id);
+        }
+      });
+
+      // Batch count items for each type
+      const [articleCounts, serviceCounts, portfolioCounts] = await Promise.all([
+        categoriesByType.article.length > 0
+          ? Article.aggregate([
+              { $match: { categories: { $in: categoriesByType.article }, deletedAt: null } },
+              { $unwind: '$categories' },
+              { $match: { categories: { $in: categoriesByType.article } } },
+              { $group: { _id: '$categories', count: { $sum: 1 } } }
+            ])
+          : [],
+        categoriesByType.service.length > 0
+          ? Service.aggregate([
+              { $match: { categories: { $in: categoriesByType.service }, deletedAt: null } },
+              { $unwind: '$categories' },
+              { $match: { categories: { $in: categoriesByType.service } } },
+              { $group: { _id: '$categories', count: { $sum: 1 } } }
+            ])
+          : [],
+        categoriesByType.portfolio.length > 0
+          ? Portfolio.aggregate([
+              { $match: { categories: { $in: categoriesByType.portfolio }, deletedAt: null } },
+              { $unwind: '$categories' },
+              { $match: { categories: { $in: categoriesByType.portfolio } } },
+              { $group: { _id: '$categories', count: { $sum: 1 } } }
+            ])
+          : []
+      ]);
+
+      // Create count maps for quick lookup
+      const itemCountMap = new Map();
+      [...articleCounts, ...serviceCounts, ...portfolioCounts].forEach(item => {
+        const categoryId = item._id.toString();
+        const currentCount = itemCountMap.get(categoryId) || 0;
+        itemCountMap.set(categoryId, currentCount + item.count);
+      });
+
+      // Add statistics to each category
+      const categoriesWithStats = categories.map(category => {
+        // Calculate childrenCount from populated children array
+        const childrenCount = category.children?.length || 0;
+
+        // Get itemCount from map (default to 0)
+        const categoryId = category._id.toString();
+        const itemCount = itemCountMap.get(categoryId) || 0;
+
+        return {
+          ...category,
+          itemCount,
+          childrenCount
+        };
+      });
+
       return {
-        data: categories,
+        data: categoriesWithStats,
         pagination: {
           page: parsedPage,
           limit: parsedLimit,
