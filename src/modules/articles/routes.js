@@ -30,6 +30,10 @@ router.get('/slug/:slug', optionalAuth, ArticleController.getArticleBySlug);
 router.post('/:id/rate', optionalAuth, validate(rateArticleSchema), ArticleRatingController.rateArticle);
 router.get('/:id/user-rating', optionalAuth, ArticleRatingController.getUserRating);
 
+// Public like and view routes (no auth required - uses browser fingerprinting)
+router.post('/:id/like', optionalAuth, ArticleController.likeArticle);
+router.post('/:id/view', optionalAuth, ArticleController.trackView);
+
 // Protected routes
 router.use(authenticate);
 
@@ -70,11 +74,6 @@ router.delete(
   auditLog('DELETE_ARTICLE', 'articles'),
   ArticleController.deleteArticle
 );
-
-router.post('/:id/like', authenticate, ArticleController.likeArticle);
-
-// View tracking route (public, no auth required)
-router.post('/:id/view', optionalAuth, ArticleController.trackView);
 
 // Bookmark routes (require auth)
 router.post('/:id/bookmark', authenticate, auditLog('TOGGLE_BOOKMARK', 'bookmarks'), BookmarkController.toggleBookmark);

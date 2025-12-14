@@ -498,20 +498,20 @@ export class ArticleController {
         });
       }
 
-      // Get user identifier (user ID if logged in, or IP address)
-      const userId = req.user?.id || null;
-      const userIdentifier = userId || req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'anonymous';
+      // Generate user identifier using the same method as view tracking (browser fingerprinting)
+      // This allows tracking unique likes without requiring login (similar to WordPress)
+      const userIdentifier = ArticleService.generateUserIdentifier(req);
+      const userId = req.user?.id || null; // Optional: only if user is logged in
+      const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || null;
+      const userAgent = req.headers['user-agent'] || null;
 
       // Import ArticleLike model
       const { ArticleLike } = await import('./articleLikeModel.js');
 
-      // Check if user already liked this article
+      // Check if user already liked this article (by userIdentifier - works for both logged-in and anonymous users)
       const existingLike = await ArticleLike.findOne({
         article: article._id,
-        $or: [
-          userId ? { user: userId } : {},
-          { userIdentifier: userIdentifier }
-        ]
+        userIdentifier: userIdentifier
       });
 
       let isLiked = false;
@@ -526,7 +526,7 @@ export class ArticleController {
         // User hasn't liked - add the like
         await ArticleLike.create({
           article: article._id,
-          user: userId,
+          user: userId || null,
           userIdentifier: userIdentifier
         });
         newLikesCount = article.likes + 1;
@@ -542,7 +542,8 @@ export class ArticleController {
         message: isLiked ? 'مقاله لایک شد' : 'لایک شما برداشته شد',
         data: { 
           likes: newLikesCount,
-          isLiked: isLiked
+          isLiked: isLiked,
+          wasAlreadyLiked: !!existingLike // Indicate if it was already liked (now unliked)
         }
       });
     } catch (error) {
@@ -550,15 +551,11 @@ export class ArticleController {
       if (error.code === 11000) {
         // Like already exists or was just created - fetch current state
         const { ArticleLike } = await import('./articleLikeModel.js');
-        const userId = req.user?.id || null;
-        const userIdentifier = userId || req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'anonymous';
+        const userIdentifier = ArticleService.generateUserIdentifier(req);
         
         const existingLike = await ArticleLike.findOne({
           article: req.params.id,
-          $or: [
-            userId ? { user: userId } : {},
-            { userIdentifier: userIdentifier }
-          ]
+          userIdentifier: userIdentifier
         });
 
         const article = await Article.findById(req.params.id);
@@ -597,11 +594,14 @@ export class ArticleController {
   static async trackView(req, res, next) {
     try {
       const { id } = req.params;
+      // Generate user identifier (works for both logged-in and anonymous users)
+      // Uses IP + User Agent + Browser Fingerprint (similar to WordPress)
       const userIdentifier = ArticleService.generateUserIdentifier(req);
-      const userId = req.user?.id || null;
+      const userId = req.user?.id || null; // Optional: only if user is logged in
       const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || null;
       const userAgent = req.headers['user-agent'] || null;
 
+      // Track view (works for both authenticated and anonymous users)
       const result = await ArticleService.trackView(id, userIdentifier, userId, ip, userAgent);
 
       res.json({

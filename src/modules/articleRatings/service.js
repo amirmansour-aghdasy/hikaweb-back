@@ -1,14 +1,15 @@
 import { ArticleRating } from './model.js';
 import { Article } from '../articles/model.js';
+import { ArticleService } from '../articles/service.js';
 import { logger } from '../../utils/logger.js';
 import crypto from 'crypto';
 
 export class ArticleRatingService {
-  // Generate user identifier from IP and user agent
+  // Generate user identifier from IP, user agent, and browser fingerprint (same as ArticleService)
+  // This allows tracking unique ratings without requiring login (similar to WordPress)
   static generateUserIdentifier(req) {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    return crypto.createHash('sha256').update(`${ip}-${userAgent}`).digest('hex');
+    // Use the same method as ArticleService for consistency
+    return ArticleService.generateUserIdentifier(req);
   }
 
   static async rateArticle(articleId, rating, userIdentifier, userId = null) {
@@ -62,7 +63,8 @@ export class ArticleRatingService {
       return {
         rating: ratingDoc.rating,
         averageRating: article.ratings.average,
-        totalRatings: article.ratings.count
+        totalRatings: article.ratings.count,
+        isNewRating: !existingRating // Indicate if this is a new rating or an update
       };
     } catch (error) {
       logger.error('Rate article error:', error);

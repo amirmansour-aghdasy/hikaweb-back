@@ -266,11 +266,18 @@ export class ArticleService {
     }
   }
 
-  // Generate user identifier from IP and user agent (same as ArticleRatingService)
+  // Generate user identifier from IP, user agent, and browser fingerprint (similar to WordPress)
+  // This allows tracking unique visitors without requiring login
   static generateUserIdentifier(req) {
     const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
-    return crypto.createHash('sha256').update(`${ip}-${userAgent}`).digest('hex');
+    // Include browser fingerprint if provided (from frontend)
+    const browserFingerprint = req.headers['x-browser-fingerprint'] || req.body?.browserFingerprint || '';
+    
+    // Create a unique identifier combining IP, User Agent, and browser fingerprint
+    // This is similar to how WordPress tracks unique visitors without login
+    const identifierString = `${ip}-${userAgent}-${browserFingerprint}`;
+    return crypto.createHash('sha256').update(identifierString).digest('hex');
   }
 
   // Track unique view for an article

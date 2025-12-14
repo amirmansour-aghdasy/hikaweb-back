@@ -49,6 +49,7 @@ import systemRoutes from './modules/system/routes.js';
 import bookmarkRoutes from './modules/bookmarks/routes.js';
 import articleRatingRoutes from './modules/articleRatings/routes.js';
 import contactMessageRoutes from './modules/contact-messages/routes.js';
+import shortLinkRoutes from './modules/shortlinks/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -109,7 +110,8 @@ class App {
           'Authorization',
           'Accept-Language',
           'X-CSRF-Token',
-          'X-Requested-With'
+          'X-Requested-With',
+          'X-Browser-Fingerprint'
         ],
         exposedHeaders: ['X-CSRF-Token'],
         preflightContinue: false,
@@ -193,6 +195,7 @@ class App {
       });
     });
 
+
     // API routes
     const apiRouter = express.Router();
 
@@ -241,8 +244,22 @@ class App {
     // System
     apiRouter.use('/system', systemRoutes);
 
+    // Short Links
+    apiRouter.use('/shortlinks', shortLinkRoutes);
+
     // Mount API routes
     this.app.use('/api/v1', apiRouter);
+    
+    // Short link redirect route (must be after API routes)
+    // This allows /b/xxxxx format for short links
+    this.app.get('/b/:code', async (req, res, next) => {
+      try {
+        const { ShortLinkController } = await import('./modules/shortlinks/controller.js');
+        await ShortLinkController.redirectShortLink(req, res, next);
+      } catch (error) {
+        next(error);
+      }
+    });
 
     // API root endpoint
     this.app.get('/api', (req, res) => {

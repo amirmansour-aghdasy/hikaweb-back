@@ -175,6 +175,7 @@ export class SettingsService {
           companyName: settings.business?.companyName,
           businessHours: settings.business?.businessHours
         },
+        seo: settings.seo || {},
         whatsapp: settings.whatsapp || {
           enabled: false,
           agents: [],
