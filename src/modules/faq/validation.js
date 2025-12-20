@@ -1,23 +1,25 @@
 import Joi from 'joi';
+import {
+  multiLangStringSchema,
+  objectIdSchema,
+  objectIdArraySchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createFAQSchema = Joi.object({
-  question: Joi.object({
-    fa: Joi.string().required(),
-    en: Joi.string().required()
-  }).required(),
+  question: multiLangStringSchema({
+    required: true,
+    fieldName: 'سوال'
+  }),
 
-  answer: Joi.object({
-    fa: Joi.string().required(),
-    en: Joi.string().required()
-  }).required(),
+  answer: multiLangStringSchema({
+    required: true,
+    fieldName: 'پاسخ'
+  }),
 
-  serviceId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  serviceId: objectIdSchema('خدمت')
     .optional(),
 
-  categoryIds: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-    .optional(),
+  categoryIds: objectIdArraySchema('دسته‌بندی'),
 
   tags: Joi.array().items(Joi.string()).optional(),
 

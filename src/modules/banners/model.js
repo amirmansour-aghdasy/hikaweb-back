@@ -53,12 +53,49 @@ const bannerSchema = new mongoose.Schema(
       }
     },
 
-    // موقعیت نمایش بنر (home-page-banners, etc.)
+    // موقعیت نمایش بنر
+    // home-page-banners: بنرهای صفحه اصلی
+    // service-page-banner: بنر صفحات خدمت (عمومی)
+    // service-[slug]-banner: بنر مخصوص یک خدمت خاص (مثلاً service-logo-design-banner)
+    // portfolio-page-banner: بنر صفحه نمونه کارها
+    // mag-page-banner: بنر صفحه مجله
+    // article-page-banner: بنر صفحات مقاله
     position: {
       type: String,
       required: true,
       default: 'home-page-banners',
-      enum: ['home-page-banners'],
+      validate: {
+        validator: function(v) {
+          // Allow predefined positions
+          const predefined = [
+            'home-page-banners',
+            'service-page-banner',
+            'portfolio-page-banner',
+            'mag-page-banner',
+            'article-page-banner'
+          ];
+          
+          if (predefined.includes(v)) {
+            return true;
+          }
+          
+          // Allow service-specific banners (service-[slug]-banner)
+          if (v.startsWith('service-') && v.endsWith('-banner')) {
+            return true;
+          }
+          
+          return false;
+        },
+        message: 'موقعیت بنر نامعتبر است'
+      },
+      index: true
+    },
+    
+    // برای بنرهای مخصوص یک خدمت خاص
+    // اگر این فیلد پر باشد، position باید service-[slug]-banner باشد
+    serviceSlug: {
+      type: String,
+      default: null,
       index: true
     },
 

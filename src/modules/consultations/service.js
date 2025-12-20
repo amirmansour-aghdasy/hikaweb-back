@@ -21,8 +21,18 @@ export class ConsultationService {
       }
 
       // Convert simple form data to full consultation data
+      // Support both fullName (new simplified form) and firstName/lastName (old form)
+      let fullName;
+      if (simpleData.fullName) {
+        fullName = simpleData.fullName.trim();
+      } else if (simpleData.firstName && simpleData.lastName) {
+        fullName = `${simpleData.firstName} ${simpleData.lastName}`.trim();
+      } else {
+        throw new Error('نام و نام خانوادگی الزامی است');
+      }
+
       const consultationData = {
-        fullName: `${simpleData.firstName} ${simpleData.lastName}`.trim(),
+        fullName: fullName,
         phoneNumber: simpleData.phone,
         email: simpleData.email || `${simpleData.phone}@temp.hikaweb.ir`, // Use temp email if not provided
         services: [service._id],

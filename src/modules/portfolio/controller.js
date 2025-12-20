@@ -1,6 +1,7 @@
 import { PortfolioService } from './service.js';
 import { Portfolio } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class PortfolioController {
   /**
@@ -30,17 +31,12 @@ export class PortfolioController {
    *         description: نمونه کار با موفقیت ایجاد شد
    */
   static async createPortfolio(req, res, next) {
-    try {
-      const portfolio = await PortfolioService.createPortfolio(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: req.t('portfolio.createSuccess'),
-        data: { portfolio }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      PortfolioService.createPortfolio,
+      'portfolio',
+      'portfolio.createSuccess'
+    );
   }
 
   /**
@@ -81,16 +77,7 @@ export class PortfolioController {
    *         description: لیست نمونه کارها دریافت شد
    */
   static async getPortfolios(req, res, next) {
-    try {
-      const result = await PortfolioService.getPortfolios(req.query);
-
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, PortfolioService.getPortfolios);
   }
 
   /**
@@ -226,21 +213,12 @@ export class PortfolioController {
    *         description: نمونه کار یافت نشد
    */
   static async updatePortfolio(req, res, next) {
-    try {
-      const portfolio = await PortfolioService.updatePortfolio(
-        req.params.id,
-        req.body,
-        req.user.id
-      );
-
-      res.json({
-        success: true,
-        message: req.t('portfolio.updateSuccess'),
-        data: { portfolio }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      PortfolioService.updatePortfolio,
+      'portfolio',
+      'portfolio.updateSuccess'
+    );
   }
 
   /**
@@ -264,16 +242,12 @@ export class PortfolioController {
    *         description: نمونه کار یافت نشد
    */
   static async deletePortfolio(req, res, next) {
-    try {
-      await PortfolioService.deletePortfolio(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('portfolio.deleteSuccess')
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      PortfolioService.deletePortfolio,
+      'portfolio',
+      'portfolio.deleteSuccess'
+    );
   }
 
   /**

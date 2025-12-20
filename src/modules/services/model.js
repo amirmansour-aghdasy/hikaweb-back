@@ -126,9 +126,21 @@ const serviceSchema = new mongoose.Schema({
   versionKey: false
 });
 
-// Fixed: Combined unique index instead of separate ones
-serviceSchema.index({ 'slug.fa': 1 }, { unique: true, sparse: true });
-serviceSchema.index({ 'slug.en': 1 }, { unique: true, sparse: true });
+// Partial indexes: only index documents where deletedAt is null
+serviceSchema.index(
+  { 'slug.fa': 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { deletedAt: null }
+  }
+);
+serviceSchema.index(
+  { 'slug.en': 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { deletedAt: null }
+  }
+);
 serviceSchema.index({ categories: 1 });
 serviceSchema.index({ orderIndex: 1 });
 serviceSchema.index({ 'name.fa': 'text', 'description.fa': 'text' });

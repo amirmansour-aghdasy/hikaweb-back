@@ -1,36 +1,31 @@
 import { Article } from './model.js';
 import { ArticleView } from './articleViewModel.js';
-import { Category } from '../categories/model.js';
-import { Media } from '../media/model.js';
 import { Portfolio } from '../portfolio/model.js';
 import { logger } from '../../utils/logger.js';
+import { BaseService } from '../../shared/services/baseService.js';
 import crypto from 'crypto';
 
-export class ArticleService {
+export class ArticleService extends BaseService {
+  constructor() {
+    super(Article, {
+      cachePrefix: 'articles',
+      slugField: 'title',
+      categoryType: 'article',
+      populateFields: ['author', 'categories'],
+      imageFields: {
+        featuredImage: 'featuredImage'
+      }
+    });
+  }
   static async createArticle(articleData, userId) {
     try {
-      // Check for duplicate slugs
-      const existingSlugs = await Article.find({
-        $or: [{ 'slug.fa': articleData.slug.fa }, { 'slug.en': articleData.slug.en }],
-        deletedAt: null
-      });
-
-      if (existingSlugs.length > 0) {
-        throw new Error('این آدرس یکتا قبلاً استفاده شده است');
-      }
-
-      // Validate categories exist
-      if (articleData.categories && articleData.categories.length > 0) {
-        const categoriesCount = await Category.countDocuments({
-          _id: { $in: articleData.categories },
-          type: 'article',
-          deletedAt: null
-        });
-
-        if (categoriesCount !== articleData.categories.length) {
-          throw new Error('برخی از دسته‌بندی‌های انتخابی نامعتبر هستند');
-        }
-      }
+      const service = new ArticleService();
+      
+      // Generate and validate slug using BaseService
+      await service.generateAndValidateSlug(articleData);
+      
+      // Validate categories using BaseService
+      await service.validateCategories(articleData.categories);
 
       const article = new Article({
         ...articleData,
@@ -40,12 +35,13 @@ export class ArticleService {
       });
 
       await article.save();
-      await article.populate(['author', 'categories']);
+      await service.populateDocument(article);
 
-      // Track featured image usage
-      if (article.featuredImage) {
-        await this.trackImageUsage(article.featuredImage, article._id, 'featuredImage');
-      }
+      // Track images using BaseService
+      await service.trackAllImages(article, article._id);
+
+      // Invalidate cache using BaseService
+      await service.invalidateCache(article);
 
       logger.info(`Article created: ${article.title.fa} by user ${userId}`);
       return article;
@@ -57,36 +53,21 @@ export class ArticleService {
 
   static async updateArticle(articleId, updateData, userId) {
     try {
+      const service = new ArticleService();
       const article = await Article.findById(articleId);
 
       if (!article) {
         throw new Error('مقاله یافت نشد');
       }
 
-      // Check slug uniqueness if changed
-      if (updateData.slug) {
-        const existingSlugs = await Article.find({
-          _id: { $ne: articleId },
-          $or: [{ 'slug.fa': updateData.slug.fa }, { 'slug.en': updateData.slug.en }],
-          deletedAt: null
-        });
-
-        if (existingSlugs.length > 0) {
-          throw new Error('این آدرس یکتا قبلاً استفاده شده است');
-        }
+      // Generate and validate slug using BaseService (exclude current article)
+      if (updateData.title || updateData.slug) {
+        await service.generateAndValidateSlug(updateData, articleId);
       }
 
-      // Validate categories if provided
+      // Validate categories if provided using BaseService
       if (updateData.categories) {
-        const categoriesCount = await Category.countDocuments({
-          _id: { $in: updateData.categories },
-          type: 'article',
-          deletedAt: null
-        });
-
-        if (categoriesCount !== updateData.categories.length) {
-          throw new Error('برخی از دسته‌بندی‌های انتخابی نامعتبر هستند');
-        }
+        await service.validateCategories(updateData.categories);
       }
 
       // Handle publish status change
@@ -98,23 +79,36 @@ export class ArticleService {
         }
       }
 
-      // Track image usage changes
+      // Track image usage changes using BaseService
       if (updateData.featuredImage !== article.featuredImage) {
-        // Remove old image tracking
         if (article.featuredImage) {
-          await this.removeImageUsage(article.featuredImage, article._id, 'featuredImage');
+          await service.removeImageUsage(article.featuredImage, article._id, 'featuredImage');
         }
-        // Add new image tracking
         if (updateData.featuredImage) {
-          await this.trackImageUsage(updateData.featuredImage, article._id, 'featuredImage');
+          await service.trackImageUsage(updateData.featuredImage, article._id, 'featuredImage');
         }
       }
+
+      const oldSlug = {
+        fa: article.slug?.fa,
+        en: article.slug?.en
+      };
 
       Object.assign(article, updateData);
       article.updatedBy = userId;
 
       await article.save();
-      await article.populate(['author', 'categories']);
+      await service.populateDocument(article);
+
+      // Invalidate cache using BaseService
+      const slugChanged = updateData.slug && (
+        updateData.slug.fa !== oldSlug.fa || 
+        updateData.slug.en !== oldSlug.en
+      );
+      
+      if (slugChanged || updateData.hasOwnProperty('isPublished')) {
+        await service.invalidateCache(article, oldSlug, slugChanged);
+      }
 
       logger.info(`Article updated: ${article.title.fa} by user ${userId}`);
       return article;
@@ -126,6 +120,7 @@ export class ArticleService {
 
   static async deleteArticle(articleId, userId) {
     try {
+      const service = new ArticleService();
       const article = await Article.findById(articleId);
 
       if (!article) {
@@ -137,10 +132,11 @@ export class ArticleService {
       article.updatedBy = userId;
       await article.save();
 
-      // Remove image usage tracking
-      if (article.featuredImage) {
-        await this.removeImageUsage(article.featuredImage, article._id, 'featuredImage');
-      }
+      // Remove image usage tracking using BaseService
+      await service.removeAllImages(article, article._id);
+
+      // Invalidate cache using BaseService - important: slug is now free for reuse
+      await service.invalidateCache(article);
 
       logger.info(`Article deleted: ${article.title.fa} by user ${userId}`);
       return true;
@@ -268,15 +264,25 @@ export class ArticleService {
 
   // Generate user identifier from IP, user agent, and browser fingerprint (similar to WordPress)
   // This allows tracking unique visitors without requiring login
+  // Priority: browser fingerprint > user agent > IP (fingerprint is most reliable)
   static generateUserIdentifier(req) {
-    const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    // Include browser fingerprint if provided (from frontend)
+    // Include browser fingerprint if provided (from frontend) - this is the most reliable identifier
     const browserFingerprint = req.headers['x-browser-fingerprint'] || req.body?.browserFingerprint || '';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
     
-    // Create a unique identifier combining IP, User Agent, and browser fingerprint
+    // If browser fingerprint is provided, use it as primary identifier
+    // This ensures consistency across sessions and different IPs (e.g., mobile networks)
+    if (browserFingerprint && browserFingerprint.length > 10) {
+      // Combine fingerprint with user agent for additional uniqueness
+      // IP is less reliable (changes with network, VPN, etc.)
+      const identifierString = `${browserFingerprint}-${userAgent}`;
+      return crypto.createHash('sha256').update(identifierString).digest('hex');
+    }
+    
+    // Fallback: use IP + User Agent (less reliable but better than nothing)
     // This is similar to how WordPress tracks unique visitors without login
-    const identifierString = `${ip}-${userAgent}-${browserFingerprint}`;
+    const identifierString = `${ip}-${userAgent}`;
     return crypto.createHash('sha256').update(identifierString).digest('hex');
   }
 
@@ -305,20 +311,31 @@ export class ArticleService {
         });
         await viewDoc.save();
 
-        // Increment article view count
-        article.views += 1;
+        // Get actual count from ArticleView collection (more accurate)
+        const actualViewsCount = await ArticleView.countDocuments({ article: articleId });
+        
+        // Update article view count to match actual count (ensures accuracy)
+        article.views = actualViewsCount;
         await article.save();
 
         return {
           isNewView: true,
-          views: article.views
+          views: actualViewsCount
         };
       }
 
-      // View already exists - return current count
+      // View already exists - get actual count for accuracy
+      const actualViewsCount = await ArticleView.countDocuments({ article: articleId });
+      
+      // Sync article.views with actual count (in case of any discrepancies)
+      if (article.views !== actualViewsCount) {
+        article.views = actualViewsCount;
+        await article.save();
+      }
+
       return {
         isNewView: false,
-        views: article.views
+        views: actualViewsCount
       };
     } catch (error) {
       // If duplicate key error (race condition), just return current count
@@ -454,31 +471,22 @@ export class ArticleService {
     }
   }
 
+  // Image tracking methods are now handled by BaseService
+  // These static methods are kept for backward compatibility
   static async trackImageUsage(imageUrl, articleId, field) {
-    try {
-      const media = await Media.findOne({ url: imageUrl });
-      if (media) {
-        await media.trackUsage('Article', articleId, field);
-      }
-    } catch (error) {
-      logger.error('Track image usage error:', error);
-    }
+    const service = new ArticleService();
+    return service.trackImageUsage(imageUrl, articleId, field);
   }
 
   static async removeImageUsage(imageUrl, articleId, field) {
-    try {
-      const media = await Media.findOne({ url: imageUrl });
-      if (media) {
-        await media.removeUsage('Article', articleId, field);
-      }
-    } catch (error) {
-      logger.error('Remove image usage error:', error);
-    }
+    const service = new ArticleService();
+    return service.removeImageUsage(imageUrl, articleId, field);
   }
 
   static async getArticleStats() {
     try {
-      const stats = await Article.aggregate([
+      // Get stats from Article collection
+      const articleStats = await Article.aggregate([
         {
           $match: { deletedAt: null }
         },
@@ -507,19 +515,78 @@ export class ArticleService {
         }
       ]);
 
-      return (
-        stats[0] || {
+      // Get actual counts from ArticleView and ArticleLike collections for accuracy
+      // This ensures we show the real number of unique views/likes, not just the cached count
+      const { ArticleView } = await import('./articleViewModel.js');
+      const { ArticleLike } = await import('./articleLikeModel.js');
+      
+      const actualViewsCount = await ArticleView.countDocuments();
+      const actualLikesCount = await ArticleLike.countDocuments();
+
+      return {
+        ...(articleStats[0] || {
           total: 0,
           published: 0,
           draft: 0,
           featured: 0,
           totalViews: 0,
           totalLikes: 0
-        }
-      );
+        }),
+        // Use actual counts from view/like collections for accuracy
+        // These are the real numbers from the tracking collections
+        totalViews: actualViewsCount,
+        totalLikes: actualLikesCount
+      };
     } catch (error) {
       logger.error('Get article stats error:', error);
       return {};
+    }
+  }
+
+  /**
+   * Sync article views and likes counts from ArticleView and ArticleLike collections
+   * This ensures accuracy by counting actual records
+   */
+  static async syncArticleStats(articleId = null) {
+    try {
+      const { ArticleView } = await import('./articleViewModel.js');
+      const { ArticleLike } = await import('./articleLikeModel.js');
+
+      if (articleId) {
+        // Sync for a specific article
+        const viewsCount = await ArticleView.countDocuments({ article: articleId });
+        const likesCount = await ArticleLike.countDocuments({ article: articleId });
+
+        await Article.findByIdAndUpdate(articleId, {
+          views: viewsCount,
+          likes: likesCount
+        });
+
+        logger.info(`Synced stats for article ${articleId}: ${viewsCount} views, ${likesCount} likes`);
+        return { views: viewsCount, likes: likesCount };
+      } else {
+        // Sync for all articles
+        const articles = await Article.find({ deletedAt: null }).select('_id');
+        let synced = 0;
+
+        for (const article of articles) {
+          const viewsCount = await ArticleView.countDocuments({ article: article._id });
+          const likesCount = await ArticleLike.countDocuments({ article: article._id });
+
+          await Article.findByIdAndUpdate(article._id, {
+            views: viewsCount,
+            likes: likesCount
+          });
+
+          synced++;
+        }
+
+        logger.info(`Synced stats for ${synced} articles`);
+        return { synced };
+      }
+    } catch (error) {
+      logger.error('Sync article stats error:', error);
+      throw error;
     }
   }
 }

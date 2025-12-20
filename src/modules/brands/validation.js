@@ -1,18 +1,22 @@
 import Joi from 'joi';
+import {
+  multiLangStringSchema,
+  objectIdSchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createBrandSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
 
   slug: Joi.string()
     .pattern(/^[a-z0-9-]+$/)
-    .required(),
+    .optional(),
 
   logo: Joi.string().optional(),
 
-  description: Joi.object({
-    fa: Joi.string(),
-    en: Joi.string()
-  }).optional(),
+  description: multiLangStringSchema({
+    allowEmpty: true,
+    fieldName: 'توضیحات'
+  }),
 
   website: Joi.string().uri().optional(),
 

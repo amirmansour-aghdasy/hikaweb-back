@@ -1,15 +1,19 @@
 import Joi from 'joi';
+import {
+  multiLangStringSchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createBannerSchema = Joi.object({
-  title: Joi.object({
-    fa: Joi.string().trim().max(200).allow(''),
-    en: Joi.string().trim().max(200).allow('')
-  }).optional(),
+  title: multiLangStringSchema({
+    maxLength: 200,
+    allowEmpty: true,
+    fieldName: 'عنوان'
+  }),
 
-  description: Joi.object({
-    fa: Joi.string().allow(''),
-    en: Joi.string().allow('')
-  }).optional(),
+  description: multiLangStringSchema({
+    allowEmpty: true,
+    fieldName: 'توضیحات'
+  }),
 
   image: Joi.string().required().messages({
     'any.required': 'تصویر دسکتاپ الزامی است'

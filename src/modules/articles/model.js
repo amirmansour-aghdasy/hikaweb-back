@@ -7,8 +7,8 @@ const articleSchema = new mongoose.Schema({
     en: { type: String, required: true, trim: true, maxLength: 200 }
   },
   slug: {
-    fa: { type: String, required: true, lowercase: true },
-    en: { type: String, required: true, lowercase: true }
+    fa: { type: String, required: false, lowercase: true },
+    en: { type: String, required: false, lowercase: true }
   },
   excerpt: {
     fa: { type: String, maxLength: 500 },
@@ -70,8 +70,22 @@ const articleSchema = new mongoose.Schema({
   versionKey: false
 });
 
-articleSchema.index({ 'slug.fa': 1 }, { unique: true, sparse: true });
-articleSchema.index({ 'slug.en': 1 }, { unique: true, sparse: true });
+// Partial indexes: only index documents where deletedAt is null
+// This ensures unique slugs only for non-deleted articles
+articleSchema.index(
+  { 'slug.fa': 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { deletedAt: null }
+  }
+);
+articleSchema.index(
+  { 'slug.en': 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { deletedAt: null }
+  }
+);
 articleSchema.index({ author: 1 });
 articleSchema.index({ categories: 1 });
 articleSchema.index({ isPublished: 1 });

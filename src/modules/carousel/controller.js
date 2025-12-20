@@ -59,17 +59,7 @@ export class CarouselController {
    *         description: لیست اسلایدها دریافت شد
    */
   static async getCarousels(req, res, next) {
-    try {
-      const result = await CarouselService.getCarousels(req.query);
-
-      res.json({
-        success: true,
-        data: { carousels: result.data || result },
-        pagination: result.pagination
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, CarouselService.getCarousels);
   }
 
   /**
@@ -191,17 +181,12 @@ export class CarouselController {
    *         description: اسلاید یافت نشد
    */
   static async updateCarousel(req, res, next) {
-    try {
-      const carousel = await CarouselService.updateCarousel(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'اسلاید با موفقیت به‌روزرسانی شد',
-        data: { carousel }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      CarouselService.updateCarousel,
+      'carousel',
+      'اسلاید با موفقیت به‌روزرسانی شد'
+    );
   }
 
   /**
@@ -225,16 +210,12 @@ export class CarouselController {
    *         description: اسلاید یافت نشد
    */
   static async deleteCarousel(req, res, next) {
-    try {
-      await CarouselService.deleteCarousel(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'اسلاید با موفقیت حذف شد'
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      CarouselService.deleteCarousel,
+      'carousel',
+      'اسلاید با موفقیت حذف شد'
+    );
   }
 
   static async trackCarouselClick(req, res, next) {

@@ -1,5 +1,6 @@
 import { FAQService } from './service.js';
 import { FAQ } from './model.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class FAQController {
   /**
@@ -46,17 +47,12 @@ export class FAQController {
    *         description: سوال متداول با موفقیت ایجاد شد
    */
   static async createFAQ(req, res, next) {
-    try {
-      const faq = await FAQService.createFAQ(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: req.t('faq.createSuccess'),
-        data: { faq }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      FAQService.createFAQ,
+      'faq',
+      'faq.createSuccess'
+    );
   }
 
   /**
@@ -248,17 +244,12 @@ export class FAQController {
    *         description: سوال متداول یافت نشد
    */
   static async updateFAQ(req, res, next) {
-    try {
-      const faq = await FAQService.updateFAQ(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('faq.updateSuccess'),
-        data: { faq }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      FAQService.updateFAQ,
+      'faq',
+      'faq.updateSuccess'
+    );
   }
 
   /**
@@ -282,16 +273,12 @@ export class FAQController {
    *         description: سوال متداول یافت نشد
    */
   static async deleteFAQ(req, res, next) {
-    try {
-      await FAQService.deleteFAQ(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('faq.deleteSuccess')
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      FAQService.deleteFAQ,
+      'faq',
+      'faq.deleteSuccess'
+    );
   }
 
   /**

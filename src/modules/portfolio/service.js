@@ -1,21 +1,45 @@
 import { Portfolio } from './model.js';
 import { Service } from '../services/model.js';
-import { Category } from '../categories/model.js';
-import { Media } from '../media/model.js';
 import { logger } from '../../utils/logger.js';
+import { BaseService } from '../../shared/services/baseService.js';
 
-export class PortfolioService {
+export class PortfolioService extends BaseService {
+  constructor() {
+    super(Portfolio, {
+      cachePrefix: 'portfolios',
+      slugField: 'title',
+      categoryType: 'portfolio',
+      populateFields: ['services', 'categories'],
+      imageFields: {
+        featuredImage: 'featuredImage',
+        gallery: 'gallery'
+      }
+    });
+  }
   static async createPortfolio(portfolioData, userId) {
     try {
-      // Check for duplicate slugs
-      const existingSlugs = await Portfolio.find({
-        $or: [{ 'slug.fa': portfolioData.slug.fa }, { 'slug.en': portfolioData.slug.en }],
-        deletedAt: null
-      });
-
-      if (existingSlugs.length > 0) {
-        throw new Error('این آدرس یکتا قبلاً استفاده شده است');
+      // Auto-generate slugs if not provided
+      if (!portfolioData.slug || !portfolioData.slug.fa || !portfolioData.slug.en) {
+        const generatedSlugs = generateSlugs(portfolioData.title);
+        portfolioData.slug = {
+          fa: portfolioData.slug?.fa || generatedSlugs.fa,
+          en: portfolioData.slug?.en || generatedSlugs.en
+        };
       }
+
+      // Ensure slugs are unique
+      const checkDuplicateFa = async (slug) => {
+        const exists = await Portfolio.findOne({ 'slug.fa': slug, deletedAt: null });
+        return !!exists;
+      };
+      
+      const checkDuplicateEn = async (slug) => {
+        const exists = await Portfolio.findOne({ 'slug.en': slug, deletedAt: null });
+        return !!exists;
+      };
+
+      portfolioData.slug.fa = await ensureUniqueSlug(checkDuplicateFa, portfolioData.slug.fa);
+      portfolioData.slug.en = await ensureUniqueSlug(checkDuplicateEn, portfolioData.slug.en);
 
       // Validate services exist
       if (portfolioData.services && portfolioData.services.length > 0) {
@@ -72,23 +96,16 @@ export class PortfolioService {
 
   static async updatePortfolio(portfolioId, updateData, userId) {
     try {
+      const service = new PortfolioService();
       const portfolio = await Portfolio.findById(portfolioId);
 
       if (!portfolio) {
         throw new Error('نمونه کار یافت نشد');
       }
 
-      // Check slug uniqueness if changed
-      if (updateData.slug) {
-        const existingSlugs = await Portfolio.find({
-          _id: { $ne: portfolioId },
-          $or: [{ 'slug.fa': updateData.slug.fa }, { 'slug.en': updateData.slug.en }],
-          deletedAt: null
-        });
-
-        if (existingSlugs.length > 0) {
-          throw new Error('این آدرس یکتا قبلاً استفاده شده است');
-        }
+      // Generate and validate slug using BaseService (exclude current portfolio)
+      if (updateData.title || updateData.slug) {
+        await service.generateAndValidateSlug(updateData, portfolioId);
       }
 
       // Validate services if provided
@@ -129,6 +146,7 @@ export class PortfolioService {
 
   static async deletePortfolio(portfolioId, userId) {
     try {
+      const service = new PortfolioService();
       const portfolio = await Portfolio.findById(portfolioId);
 
       if (!portfolio) {
@@ -139,16 +157,11 @@ export class PortfolioService {
       portfolio.updatedBy = userId;
       await portfolio.save();
 
-      // Remove image usage tracking
-      if (portfolio.featuredImage) {
-        await this.removeImageUsage(portfolio.featuredImage, portfolio._id, 'featuredImage');
-      }
+      // Remove image usage tracking using BaseService (handles both featuredImage and gallery)
+      await service.removeAllImages(portfolio, portfolio._id);
 
-      if (portfolio.gallery && portfolio.gallery.length > 0) {
-        for (let i = 0; i < portfolio.gallery.length; i++) {
-          await this.removeImageUsage(portfolio.gallery[i].url, portfolio._id, `gallery.${i}`);
-        }
-      }
+      // Invalidate cache using BaseService
+      await service.invalidateCache(portfolio);
 
       logger.info(`Portfolio deleted: ${portfolio.title.fa} by user ${userId}`);
       return true;

@@ -5,6 +5,11 @@ import { logger } from '../../utils/logger.js';
 export class BannerService {
   static async createBanner(bannerData, userId) {
     try {
+      // Auto-set position if serviceSlug is provided
+      if (bannerData.serviceSlug && !bannerData.position?.startsWith('service-')) {
+        bannerData.position = `service-${bannerData.serviceSlug}-banner`;
+      }
+
       const banner = new Banner({
         ...bannerData,
         createdBy: userId
@@ -34,6 +39,11 @@ export class BannerService {
 
       if (!banner) {
         throw new Error('بنر یافت نشد');
+      }
+
+      // Auto-set position if serviceSlug is provided
+      if (updateData.serviceSlug && !updateData.position?.startsWith('service-')) {
+        updateData.position = `service-${updateData.serviceSlug}-banner`;
       }
 
       // Track image changes
@@ -167,14 +177,13 @@ export class BannerService {
     }
   }
 
-  static async getActiveBanners(position) {
+  static async getActiveBanners(position, serviceSlug = null) {
     try {
       const now = new Date();
-      const query = {
+      let query = {
         deletedAt: null,
         status: 'active',
         isActive: true,
-        position: position || 'home-page-banners',
         $or: [
           { 'schedule.isScheduled': false },
           {
@@ -185,6 +194,15 @@ export class BannerService {
         ]
       };
 
+      // اگر serviceSlug مشخص شده باشد، بنر مخصوص آن خدمت را برگردان
+      if (serviceSlug) {
+        query.position = `service-${serviceSlug}-banner`;
+      } else if (position) {
+        query.position = position;
+      } else {
+        query.position = 'home-page-banners';
+      }
+
       const banners = await Banner.find(query)
         .sort({ orderIndex: 1 })
         .lean();
@@ -193,6 +211,52 @@ export class BannerService {
     } catch (error) {
       logger.error('Get active banners error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get banner for a specific service page
+   * First checks for service-specific banner, then falls back to general service-page-banner
+   */
+  static async getServiceBanner(serviceSlug) {
+    try {
+      const now = new Date();
+      const baseQuery = {
+        deletedAt: null,
+        status: 'active',
+        isActive: true,
+        $or: [
+          { 'schedule.isScheduled': false },
+          {
+            'schedule.isScheduled': true,
+            'schedule.startDate': { $lte: now },
+            'schedule.endDate': { $gte: now }
+          }
+        ]
+      };
+
+      // First try to get service-specific banner
+      let banner = await Banner.findOne({
+        ...baseQuery,
+        position: `service-${serviceSlug}-banner`
+      })
+        .sort({ orderIndex: 1 })
+        .lean();
+
+      // If not found, get general service page banner
+      if (!banner) {
+        banner = await Banner.findOne({
+          ...baseQuery,
+          position: 'service-page-banner'
+        })
+          .sort({ orderIndex: 1 })
+          .lean();
+      }
+
+      return banner;
+    } catch (error) {
+      logger.error('Get service banner error:', error);
+      return null;
     }
   }
 

@@ -73,15 +73,15 @@ export class ContactMessageController {
    *         schema:
    *           type: integer
    *           default: 10
-   *       - in: query
-   *         name: search
-   *         schema:
-   *           type: string
-   *              - in: query
-       *         name: status
-       *         schema:
-       *           type: string
-       *           enum: [new, read, archived]
+     *       - in: query
+     *         name: search
+     *         schema:
+     *           type: string
+     *       - in: query
+     *         name: status
+     *         schema:
+     *           type: string
+     *           enum: [new, read, archived]
    *     responses:
    *       200:
    *         description: لیست پیام‌ها دریافت شد

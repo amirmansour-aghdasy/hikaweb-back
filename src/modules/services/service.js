@@ -1,49 +1,45 @@
 import { Service } from './model.js';
-import { Category } from '../categories/model.js';
-import { Media } from '../media/model.js';
 import { logger } from '../../utils/logger.js';
+import { BaseService } from '../../shared/services/baseService.js';
 
-export class ServiceService {
+export class ServiceService extends BaseService {
+  constructor() {
+    super(Service, {
+      cachePrefix: 'services',
+      slugField: 'name',
+      categoryType: 'service',
+      populateFields: ['categories'],
+      imageFields: {
+        featuredImage: 'featuredImage'
+      }
+    });
+  }
   static async createService(serviceData, userId) {
     try {
-      // Check for duplicate slugs
-      const existingSlugs = await Service.find({
-        $or: [{ 'slug.fa': serviceData.slug.fa }, { 'slug.en': serviceData.slug.en }],
-        deletedAt: null
-      });
+      const service = new ServiceService();
+      
+      // Generate and validate slug using BaseService
+      await service.generateAndValidateSlug(serviceData);
+      
+      // Validate categories using BaseService
+      await service.validateCategories(serviceData.categories);
 
-      if (existingSlugs.length > 0) {
-        throw new Error('این آدرس یکتا قبلاً استفاده شده است');
-      }
-
-      // Validate categories
-      if (serviceData.categories && serviceData.categories.length > 0) {
-        const categoriesCount = await Category.countDocuments({
-          _id: { $in: serviceData.categories },
-          type: 'service',
-          deletedAt: null
-        });
-
-        if (categoriesCount !== serviceData.categories.length) {
-          throw new Error('برخی از دسته‌بندی‌های انتخابی نامعتبر هستند');
-        }
-      }
-
-      const service = new Service({
+      const serviceDoc = new Service({
         ...serviceData,
         createdBy: userId
       });
 
-      await service.save();
-      await service.populate('categories');
+      await serviceDoc.save();
+      await service.populateDocument(serviceDoc);
 
-      // Track featured image usage
-      if (service.featuredImage) {
-        await this.trackImageUsage(service.featuredImage, service._id, 'featuredImage');
-      }
+      // Track images using BaseService
+      await service.trackAllImages(serviceDoc, serviceDoc._id);
 
-      logger.info(`Service created: ${service.name.fa} by user ${userId}`);
-      return service;
+      // Invalidate cache using BaseService
+      await service.invalidateCache(serviceDoc);
+
+      logger.info(`Service created: ${serviceDoc.name.fa} by user ${userId}`);
+      return serviceDoc;
     } catch (error) {
       logger.error('Service creation error:', error);
       throw error;
@@ -58,17 +54,38 @@ export class ServiceService {
         throw new Error('خدمت یافت نشد');
       }
 
-      // Check slug uniqueness if changed
-      if (updateData.slug) {
-        const existingSlugs = await Service.find({
-          _id: { $ne: serviceId },
-          $or: [{ 'slug.fa': updateData.slug.fa }, { 'slug.en': updateData.slug.en }],
-          deletedAt: null
-        });
-
-        if (existingSlugs.length > 0) {
-          throw new Error('این آدرس یکتا قبلاً استفاده شده است');
+      // Auto-generate slugs if name changed and slug not provided
+      if (updateData.name && (!updateData.slug || !updateData.slug.fa || !updateData.slug.en)) {
+        const generatedSlugs = generateSlugs(updateData.name);
+        if (!updateData.slug) {
+          updateData.slug = {};
         }
+        updateData.slug.fa = updateData.slug.fa || generatedSlugs.fa;
+        updateData.slug.en = updateData.slug.en || generatedSlugs.en;
+      }
+
+      // Ensure slugs are unique if changed
+      if (updateData.slug) {
+        const checkDuplicateFa = async (slug) => {
+          const exists = await Service.findOne({ 
+            _id: { $ne: serviceId },
+            'slug.fa': slug, 
+            deletedAt: null 
+          });
+          return !!exists;
+        };
+        
+        const checkDuplicateEn = async (slug) => {
+          const exists = await Service.findOne({ 
+            _id: { $ne: serviceId },
+            'slug.en': slug, 
+            deletedAt: null 
+          });
+          return !!exists;
+        };
+
+        updateData.slug.fa = await ensureUniqueSlug(checkDuplicateFa, updateData.slug.fa);
+        updateData.slug.en = await ensureUniqueSlug(checkDuplicateEn, updateData.slug.en);
       }
 
       // Track image usage changes
@@ -81,11 +98,31 @@ export class ServiceService {
         }
       }
 
+      const oldSlug = {
+        fa: service.slug?.fa,
+        en: service.slug?.en
+      };
+
       Object.assign(service, updateData);
       service.updatedBy = userId;
 
       await service.save();
       await service.populate('categories');
+
+      // Invalidate cache if slug changed
+      const slugChanged = updateData.slug && (
+        updateData.slug.fa !== oldSlug.fa || 
+        updateData.slug.en !== oldSlug.en
+      );
+      
+      if (slugChanged) {
+        await cacheService.deletePattern('services:*');
+        await cacheService.delete(`service:${service._id}`);
+        if (oldSlug.fa) await cacheService.delete(`services:slug:${oldSlug.fa}`);
+        if (oldSlug.en) await cacheService.delete(`services:slug:${oldSlug.en}`);
+        if (service.slug?.fa) await cacheService.delete(`services:slug:${service.slug.fa}`);
+        if (service.slug?.en) await cacheService.delete(`services:slug:${service.slug.en}`);
+      }
 
       logger.info(`Service updated: ${service.name.fa} by user ${userId}`);
       return service;
@@ -97,22 +134,24 @@ export class ServiceService {
 
   static async deleteService(serviceId, userId) {
     try {
-      const service = await Service.findById(serviceId);
+      const service = new ServiceService();
+      const serviceDoc = await Service.findById(serviceId);
 
-      if (!service) {
+      if (!serviceDoc) {
         throw new Error('خدمت یافت نشد');
       }
 
-      await service.softDelete();
-      service.updatedBy = userId;
-      await service.save();
+      await serviceDoc.softDelete();
+      serviceDoc.updatedBy = userId;
+      await serviceDoc.save();
 
-      // Remove image usage tracking
-      if (service.featuredImage) {
-        await this.removeImageUsage(service.featuredImage, service._id, 'featuredImage');
-      }
+      // Remove image usage tracking using BaseService
+      await service.removeAllImages(serviceDoc, serviceDoc._id);
 
-      logger.info(`Service deleted: ${service.name.fa} by user ${userId}`);
+      // Invalidate cache using BaseService - slug is now free for reuse
+      await service.invalidateCache(serviceDoc);
+
+      logger.info(`Service deleted: ${serviceDoc.name.fa} by user ${userId}`);
       return true;
     } catch (error) {
       logger.error('Service deletion error:', error);

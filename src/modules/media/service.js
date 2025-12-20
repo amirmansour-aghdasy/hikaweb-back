@@ -8,6 +8,7 @@ import { logger } from '../../utils/logger.js';
 import { config } from '../../config/environment.js';
 import { AppError } from '../../utils/appError.js';
 import { HTTP_STATUS } from '../../utils/httpStatus.js';
+import { getMediaFolder, getMediaSubfolder, buildFolderPath, normalizeFolderPath } from '../../utils/mediaFolderHelper.js';
 // FileProcessor no longer needed - we only get dimensions, no variants
 import { arvanObjectStorageService } from '../../services/arvanObjectStorage.js';
 
@@ -92,10 +93,16 @@ export class MediaService {
       
       const fileType = getFileTypeCategory(file.mimetype);
       const uniqueFilename = generateUniqueFilename(file.originalname);
-      const folder = metadata.folder || '/';
-      // Remove leading slash from folder and ensure key doesn't start with /
-      const cleanFolder = folder.replace(/^\/+/, '').replace(/\/+$/, '');
-      const key = cleanFolder ? `${cleanFolder}/${uniqueFilename}` : uniqueFilename;
+      
+      // Determine folder using helper function
+      const baseFolder = getMediaFolder(file.mimetype, fileType, metadata, file.originalname);
+      const subfolder = getMediaSubfolder(metadata, fileType);
+      const folderPath = buildFolderPath(baseFolder, subfolder);
+      const normalizedFolder = normalizeFolderPath(folderPath);
+      
+      // Build key for Arvan Object Storage
+      const key = normalizedFolder ? `${normalizedFolder}/${uniqueFilename}` : uniqueFilename;
+      const folder = normalizedFolder ? `/${normalizedFolder}` : '/';
 
       let dimensions = null;
       let variants = [];
@@ -153,7 +160,9 @@ export class MediaService {
           finalMimeType, 
           {
             type: 'original',
-            isPublic: bucket.isPublic !== false // Default to true (public-read) unless explicitly set to false
+            isPublic: bucket.isPublic !== false, // Default to true (public-read) unless explicitly set to false
+            category: baseFolder, // Store category in metadata
+            subfolder: subfolder || undefined
           },
           arvanBucketName,
           arvanRegion
@@ -176,7 +185,9 @@ export class MediaService {
           bucket: bucket._id,
           folder,
           variants, // Empty array - no variants
-          ...metadata
+          ...metadata,
+          // Store folder category in metadata for easier querying
+          category: baseFolder
         });
 
         await mediaRecord.save();
@@ -196,7 +207,9 @@ export class MediaService {
           key, 
           file.mimetype, 
           {
-            isPublic: bucket.isPublic !== false // Default to true (public-read) unless explicitly set to false
+            isPublic: bucket.isPublic !== false, // Default to true (public-read) unless explicitly set to false
+            category: baseFolder, // Store category in metadata
+            subfolder: subfolder || undefined
           },
           arvanBucketName,
           arvanRegion
@@ -212,7 +225,9 @@ export class MediaService {
           uploadedBy: user.id,
           bucket: bucket._id,
           folder,
-          ...metadata
+          ...metadata,
+          // Store folder category in metadata for easier querying
+          category: baseFolder
         });
 
         await mediaRecord.save();

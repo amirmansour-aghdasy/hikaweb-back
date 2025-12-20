@@ -1,43 +1,32 @@
 import Joi from 'joi';
+import {
+  slugSchema,
+  multiLangStringSchema,
+  categoryArraySchema,
+  objectIdArraySchema,
+  seoSchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createPortfolioSchema = Joi.object({
-  title: Joi.object({
-    fa: Joi.string().required().trim().min(5).max(200).messages({
-      'any.required': 'عنوان فارسی الزامی است',
-      'string.min': 'عنوان باید حداقل ۵ کاراکتر باشد'
-    }),
-    en: Joi.string().required().trim().min(5).max(200).messages({
-      'any.required': 'عنوان انگلیسی الزامی است'
-    })
-  }).required(),
+  title: multiLangStringSchema({
+    minLength: 5,
+    maxLength: 200,
+    required: true,
+    fieldName: 'عنوان'
+  }),
 
-  slug: Joi.object({
-    fa: Joi.string()
-      .required()
-      .trim()
-      .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف فارسی، حروف انگلیسی کوچک، اعداد و خط تیره باشد'
-      }),
-    en: Joi.string()
-      .required()
-      .trim()
-      .lowercase()
-      .pattern(/^[a-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا انگلیسی فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد'
-      })
-  }).required(),
+  slug: slugSchema,
 
-  description: Joi.object({
-    fa: Joi.string().required().min(50),
-    en: Joi.string().required().min(50)
-  }).required(),
+  description: multiLangStringSchema({
+    minLength: 50,
+    required: true,
+    fieldName: 'توضیحات'
+  }),
 
-  shortDescription: Joi.object({
-    fa: Joi.string().max(300),
-    en: Joi.string().max(300)
-  }).optional(),
+  shortDescription: multiLangStringSchema({
+    maxLength: 300,
+    fieldName: 'توضیحات کوتاه'
+  }),
 
   client: Joi.object({
     name: Joi.string().required().trim().max(100).messages({
@@ -67,17 +56,17 @@ export const createPortfolioSchema = Joi.object({
     }).optional()
   }).required(),
 
-  services: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-    .min(1)
-    .required()
-    .messages({
-      'array.min': 'حداقل یک خدمت باید انتخاب شود'
-    }),
+  services: objectIdArraySchema('خدمت', {
+    minItems: 1,
+    required: true
+  }).messages({
+    'array.min': 'حداقل یک خدمت باید انتخاب شود'
+  }),
 
-  categories: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-    .optional(),
+  categories: categoryArraySchema({
+    minItems: 0,
+    required: false
+  }),
 
   toolsUsed: Joi.array()
     .items(
@@ -158,21 +147,9 @@ export const createPortfolioSchema = Joi.object({
   orderIndex: Joi.number().default(0),
   isFeatured: Joi.boolean().default(false),
 
-  seo: Joi.object({
-    metaTitle: Joi.object({
-      fa: Joi.string().max(60),
-      en: Joi.string().max(60)
-    }),
-    metaDescription: Joi.object({
-      fa: Joi.string().max(160),
-      en: Joi.string().max(160)
-    }),
-    metaKeywords: Joi.object({
-      fa: Joi.array().items(Joi.string()),
-      en: Joi.array().items(Joi.string())
-    }),
-    ogImage: Joi.string()
-  }).optional()
+  seo: seoSchema.keys({
+    ogImage: Joi.string().optional()
+  })
 });
 
 export const updatePortfolioSchema = createPortfolioSchema.fork(

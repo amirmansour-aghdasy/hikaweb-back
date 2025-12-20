@@ -3,20 +3,50 @@ import { logger } from '../../utils/logger.js';
 import { Article } from '../articles/model.js';
 import { Service } from '../services/model.js';
 import { Portfolio } from '../portfolio/model.js';
+import { BaseService } from '../../shared/services/baseService.js';
 
-export class CategoryService {
+export class CategoryService extends BaseService {
+  constructor() {
+    super(Category, {
+      cachePrefix: 'categories',
+      slugField: 'name',
+      categoryType: null, // Categories don't validate against themselves
+      populateFields: [],
+      imageFields: {}
+    });
+  }
   static async createCategory(categoryData, userId) {
     try {
-      // Check for duplicate slugs in same type
-      const existingSlugs = await Category.find({
-        type: categoryData.type,
-        $or: [{ 'slug.fa': categoryData.slug.fa }, { 'slug.en': categoryData.slug.en }],
-        deletedAt: null
-      });
-
-      if (existingSlugs.length > 0) {
-        throw new Error('این آدرس یکتا قبلاً در این نوع دسته‌بندی استفاده شده است');
+      // Auto-generate slugs if not provided
+      if (!categoryData.slug || !categoryData.slug.fa || !categoryData.slug.en) {
+        const generatedSlugs = generateSlugs(categoryData.name);
+        categoryData.slug = {
+          fa: categoryData.slug?.fa || generatedSlugs.fa,
+          en: categoryData.slug?.en || generatedSlugs.en
+        };
       }
+
+      // Ensure slugs are unique in same type
+      const checkDuplicateFa = async (slug) => {
+        const exists = await Category.findOne({ 
+          type: categoryData.type,
+          'slug.fa': slug, 
+          deletedAt: null 
+        });
+        return !!exists;
+      };
+      
+      const checkDuplicateEn = async (slug) => {
+        const exists = await Category.findOne({ 
+          type: categoryData.type,
+          'slug.en': slug, 
+          deletedAt: null 
+        });
+        return !!exists;
+      };
+
+      categoryData.slug.fa = await ensureUniqueSlug(checkDuplicateFa, categoryData.slug.fa);
+      categoryData.slug.en = await ensureUniqueSlug(checkDuplicateEn, categoryData.slug.en);
 
       // Validate parent category if provided
       if (categoryData.parent) {

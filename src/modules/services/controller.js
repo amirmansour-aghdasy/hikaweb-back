@@ -1,6 +1,7 @@
 import { ServiceService } from './service.js';
 import { Service } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class ServiceController {
   /**
@@ -27,17 +28,12 @@ export class ServiceController {
    *         description: خدمت با موفقیت ایجاد شد
    */
   static async createService(req, res, next) {
-    try {
-      const service = await ServiceService.createService(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: req.t('services.createSuccess'),
-        data: { service }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      ServiceService.createService,
+      'service',
+      'services.createSuccess'
+    );
   }
 
   /**
@@ -74,16 +70,7 @@ export class ServiceController {
    *         description: لیست خدمات دریافت شد
    */
   static async getServices(req, res, next) {
-    try {
-      const result = await ServiceService.getServices(req.query);
-
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, ServiceService.getServices);
   }
 
   /**
@@ -220,17 +207,12 @@ export class ServiceController {
    *         description: خدمت یافت نشد
    */
   static async updateService(req, res, next) {
-    try {
-      const service = await ServiceService.updateService(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('services.updateSuccess'),
-        data: { service }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      ServiceService.updateService,
+      'service',
+      'services.updateSuccess'
+    );
   }
 
   /**
@@ -254,16 +236,12 @@ export class ServiceController {
    *         description: خدمت یافت نشد
    */
   static async deleteService(req, res, next) {
-    try {
-      await ServiceService.deleteService(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('services.deleteSuccess')
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      ServiceService.deleteService,
+      'service',
+      'services.deleteSuccess'
+    );
   }
 
   /**

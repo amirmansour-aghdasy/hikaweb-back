@@ -2,6 +2,7 @@ import { Comment } from './model.js';
 import { Service } from '../services/model.js';
 import { Article } from '../articles/model.js';
 import { Portfolio } from '../portfolio/model.js';
+import { Video } from '../videos/model.js';
 import { AppError } from '../../utils/appError.js';
 import { logger } from '../../utils/logger.js';
 import { cacheService } from '../../services/cache.js';
@@ -68,6 +69,9 @@ export class CommentService {
         break;
       case 'portfolio':
         Model = Portfolio;
+        break;
+      case 'video':
+        Model = Video;
         break;
       default:
         throw new AppError('نوع مرجع نامعتبر است', 400);

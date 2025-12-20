@@ -5,7 +5,7 @@ export const createCommentSchema = Joi.object({
 
   rating: Joi.number().min(1).max(5).integer().required(),
 
-  referenceType: Joi.string().valid('service', 'article', 'portfolio').required(),
+  referenceType: Joi.string().valid('service', 'article', 'portfolio', 'video').required(),
 
   referenceId: Joi.string()
     .pattern(/^[0-9a-fA-F]{24}$/)

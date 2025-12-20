@@ -77,6 +77,16 @@ export const createConsultationSchema = Joi.object({
 
 // Simple consultation form schema for homepage
 export const createSimpleConsultationSchema = Joi.object({
+  // Support both fullName (new simplified form) and firstName/lastName (old form for compatibility)
+  fullName: Joi.string().trim().min(2).max(100).optional().messages({
+    'string.min': 'نام باید حداقل ۲ کاراکتر باشد'
+  }),
+  firstName: Joi.string().trim().min(2).max(50).optional().messages({
+    'string.min': 'نام باید حداقل ۲ کاراکتر باشد'
+  }),
+  lastName: Joi.string().trim().min(2).max(50).optional().messages({
+    'string.min': 'نام خانوادگی باید حداقل ۲ کاراکتر باشد'
+  }),
   phone: Joi.string()
     .required()
     .pattern(/^(\+98|0)?9\d{9}$/)
@@ -84,14 +94,6 @@ export const createSimpleConsultationSchema = Joi.object({
       'any.required': 'شماره موبایل الزامی است',
       'string.pattern.base': 'شماره موبایل صحیح نیست'
     }),
-  firstName: Joi.string().required().trim().min(2).max(50).messages({
-    'any.required': 'نام الزامی است',
-    'string.min': 'نام باید حداقل ۲ کاراکتر باشد'
-  }),
-  lastName: Joi.string().required().trim().min(2).max(50).messages({
-    'any.required': 'نام خانوادگی الزامی است',
-    'string.min': 'نام خانوادگی باید حداقل ۲ کاراکتر باشد'
-  }),
   email: Joi.string().email().lowercase().trim().optional().allow('').messages({
     'string.email': 'فرمت ایمیل صحیح نیست'
   }),
@@ -102,6 +104,8 @@ export const createSimpleConsultationSchema = Joi.object({
       'any.required': 'خدمت الزامی است',
       'string.pattern.base': 'شناسه خدمت نامعتبر است'
     })
+}).or('fullName', 'firstName').messages({
+  'object.missing': 'نام و نام خانوادگی الزامی است'
 });
 
 export const updateConsultationSchema = Joi.object({

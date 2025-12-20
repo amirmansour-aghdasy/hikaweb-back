@@ -10,6 +10,7 @@ const router = Router();
 
 // Public routes
 router.get('/active/:position', optionalAuth, BannerController.getActiveBanners);
+router.get('/service/:serviceSlug', optionalAuth, BannerController.getServiceBanner);
 router.post('/:id/track-view', BannerController.trackView);
 router.post('/:id/track-click', BannerController.trackClick);
 

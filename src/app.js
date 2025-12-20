@@ -50,6 +50,7 @@ import bookmarkRoutes from './modules/bookmarks/routes.js';
 import articleRatingRoutes from './modules/articleRatings/routes.js';
 import contactMessageRoutes from './modules/contact-messages/routes.js';
 import shortLinkRoutes from './modules/shortlinks/routes.js';
+import videoRoutes from './modules/videos/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -211,6 +212,7 @@ class App {
     apiRouter.use('/bookmarks', bookmarkRoutes);
     apiRouter.use('/services', serviceRoutes);
     apiRouter.use('/portfolio', portfolioRoutes);
+    apiRouter.use('/videos', videoRoutes);
     apiRouter.use('/comments', commentRoutes);
     apiRouter.use('/team', teamRoutes);
     apiRouter.use('/faq', faqRoutes);

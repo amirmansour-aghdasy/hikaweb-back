@@ -1,5 +1,6 @@
 import { BrandService } from './service.js';
 import { Brand } from './model.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class BrandController {
   /**
@@ -61,17 +62,12 @@ export class BrandController {
    *         description: برند با موفقیت ایجاد شد
    */
   static async createBrand(req, res, next) {
-    try {
-      const brand = await BrandService.createBrand(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: req.t('brands.createSuccess'),
-        data: { brand }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      BrandService.createBrand,
+      'brand',
+      'brands.createSuccess'
+    );
   }
 
   /**
@@ -139,16 +135,7 @@ export class BrandController {
    *         description: لیست برندها دریافت شد
    */
   static async getBrands(req, res, next) {
-    try {
-      const result = await BrandService.getBrands(req.query);
-
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, BrandService.getBrands);
   }
 
   /**
@@ -269,17 +256,12 @@ export class BrandController {
    *         description: برند یافت نشد
    */
   static async updateBrand(req, res, next) {
-    try {
-      const brand = await BrandService.updateBrand(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('brands.updateSuccess'),
-        data: { brand }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      BrandService.updateBrand,
+      'brand',
+      'brands.updateSuccess'
+    );
   }
 
   /**
@@ -303,16 +285,12 @@ export class BrandController {
    *         description: برند یافت نشد
    */
   static async deleteBrand(req, res, next) {
-    try {
-      await BrandService.deleteBrand(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('brands.deleteSuccess')
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      BrandService.deleteBrand,
+      'brand',
+      'brands.deleteSuccess'
+    );
   }
 
   /**

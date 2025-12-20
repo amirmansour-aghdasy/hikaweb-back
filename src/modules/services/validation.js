@@ -1,51 +1,38 @@
 import Joi from 'joi';
+import {
+  slugSchema,
+  multiLangStringSchema,
+  categoryArraySchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createServiceSchema = Joi.object({
-  name: Joi.object({
-    fa: Joi.string().required().trim().min(3).max(200).messages({
-      'any.required': 'نام فارسی خدمت الزامی است',
-      'string.min': 'نام خدمت باید حداقل ۳ کاراکتر باشد'
-    }),
-    en: Joi.string().required().trim().min(3).max(200).messages({
-      'any.required': 'نام انگلیسی خدمت الزامی است'
-    })
-  }).required(),
+  name: multiLangStringSchema({
+    minLength: 3,
+    maxLength: 200,
+    required: true,
+    fieldName: 'نام خدمت'
+  }),
 
-  slug: Joi.object({
-    fa: Joi.string()
-      .required()
-      .trim()
-      .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف فارسی، حروف انگلیسی کوچک، اعداد و خط تیره باشد'
-      }),
-    en: Joi.string()
-      .required()
-      .lowercase()
-      .trim()
-      .pattern(/^[a-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا انگلیسی فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد'
-      })
-  }).required(),
+  slug: slugSchema,
 
-  description: Joi.object({
-    fa: Joi.string().required().min(50),
-    en: Joi.string().required().min(50)
-  }).required(),
+  description: multiLangStringSchema({
+    minLength: 50,
+    required: true,
+    fieldName: 'توضیحات'
+  }),
 
-  shortDescription: Joi.object({
-    fa: Joi.string().max(300),
-    en: Joi.string().max(300)
-  }).optional(),
+  shortDescription: multiLangStringSchema({
+    maxLength: 300,
+    fieldName: 'توضیحات کوتاه'
+  }),
 
   icon: Joi.string().optional(),
   featuredImage: Joi.string().optional(),
 
-  categories: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-    .min(1)
-    .required(),
+  categories: categoryArraySchema({
+    minItems: 1,
+    required: true
+  }),
 
   pricing: Joi.object({
     startingPrice: Joi.number().min(0).optional(),

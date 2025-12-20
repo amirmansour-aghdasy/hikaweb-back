@@ -1,6 +1,7 @@
 import { BannerService } from './service.js';
 import { Banner } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class BannerController {
   /**
@@ -22,17 +23,12 @@ export class BannerController {
    *               - link
    */
   static async createBanner(req, res, next) {
-    try {
-      const banner = await BannerService.createBanner(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: 'بنر با موفقیت ایجاد شد',
-        data: { banner }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      BannerService.createBanner,
+      'banner',
+      'بنر با موفقیت ایجاد شد'
+    );
   }
 
   /**
@@ -52,17 +48,7 @@ export class BannerController {
    *           type: boolean
    */
   static async getBanners(req, res, next) {
-    try {
-      const result = await BannerService.getBanners(req.query);
-
-      res.json({
-        success: true,
-        data: { banners: result.data || result },
-        pagination: result.pagination
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, BannerService.getBanners);
   }
 
   /**
@@ -77,15 +63,49 @@ export class BannerController {
    *         required: true
    *         schema:
    *           type: string
+   *       - in: query
+   *         name: serviceSlug
+   *         schema:
+   *           type: string
+   *         description: Slug خدمت برای دریافت بنر مخصوص آن خدمت
    */
   static async getActiveBanners(req, res, next) {
     try {
       const { position } = req.params;
-      const banners = await BannerService.getActiveBanners(position);
+      const { serviceSlug } = req.query;
+      const banners = await BannerService.getActiveBanners(position, serviceSlug);
 
       res.json({
         success: true,
         data: { banners }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v1/banners/service/{serviceSlug}:
+   *   get:
+   *     summary: دریافت بنر صفحه خدمت
+   *     tags: [Banners]
+   *     parameters:
+   *       - in: path
+   *         name: serviceSlug
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Slug خدمت
+   */
+  static async getServiceBanner(req, res, next) {
+    try {
+      const { serviceSlug } = req.params;
+      const banner = await BannerService.getServiceBanner(serviceSlug);
+
+      res.json({
+        success: true,
+        data: { banner }
       });
     } catch (error) {
       next(error);
@@ -123,18 +143,12 @@ export class BannerController {
    *       - bearerAuth: []
    */
   static async updateBanner(req, res, next) {
-    try {
-      const { id } = req.params;
-      const banner = await BannerService.updateBanner(id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'بنر با موفقیت به‌روزرسانی شد',
-        data: { banner }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      BannerService.updateBanner,
+      'banner',
+      'بنر با موفقیت به‌روزرسانی شد'
+    );
   }
 
   /**
@@ -147,17 +161,12 @@ export class BannerController {
    *       - bearerAuth: []
    */
   static async deleteBanner(req, res, next) {
-    try {
-      const { id } = req.params;
-      await BannerService.deleteBanner(id, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'بنر با موفقیت حذف شد'
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      BannerService.deleteBanner,
+      'banner',
+      'بنر با موفقیت حذف شد'
+    );
   }
 
   /**

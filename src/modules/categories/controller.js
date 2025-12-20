@@ -1,6 +1,7 @@
 import { CategoryService } from './service.js';
 import { Category } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class CategoryController {
   /**
@@ -26,17 +27,12 @@ export class CategoryController {
    *         description: دسته‌بندی با موفقیت ایجاد شد
    */
   static async createCategory(req, res, next) {
-    try {
-      const category = await CategoryService.createCategory(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: 'دسته‌بندی با موفقیت ایجاد شد',
-        data: { category }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      CategoryService.createCategory,
+      'category',
+      'دسته‌بندی با موفقیت ایجاد شد'
+    );
   }
 
   /**
@@ -70,17 +66,7 @@ export class CategoryController {
    *         description: لیست دسته‌بندی‌ها دریافت شد
    */
   static async getCategories(req, res, next) {
-    try {
-      const result = await CategoryService.getCategories(req.query);
-
-      res.json({
-        success: true,
-        data: { categories: result.data || result },
-        pagination: result.pagination
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, CategoryService.getCategories);
   }
 
   /**
@@ -197,17 +183,12 @@ export class CategoryController {
    *         description: دسته‌بندی یافت نشد
    */
   static async updateCategory(req, res, next) {
-    try {
-      const category = await CategoryService.updateCategory(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'دسته‌بندی با موفقیت به‌روزرسانی شد',
-        data: { category }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      CategoryService.updateCategory,
+      'category',
+      'دسته‌بندی با موفقیت به‌روزرسانی شد'
+    );
   }
 
   /**
@@ -231,15 +212,11 @@ export class CategoryController {
    *         description: دسته‌بندی یافت نشد
    */
   static async deleteCategory(req, res, next) {
-    try {
-      await CategoryService.deleteCategory(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: 'دسته‌بندی با موفقیت حذف شد'
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      CategoryService.deleteCategory,
+      'category',
+      'دسته‌بندی با موفقیت حذف شد'
+    );
   }
 }

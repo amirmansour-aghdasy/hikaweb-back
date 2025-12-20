@@ -1,24 +1,25 @@
 import Joi from 'joi';
+import {
+  multiLangStringSchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createCarouselSchema = Joi.object({
-  title: Joi.object({
-    fa: Joi.string().required().trim().min(3).max(200).messages({
-      'any.required': 'عنوان فارسی الزامی است'
-    }),
-    en: Joi.string().required().trim().min(3).max(200).messages({
-      'any.required': 'عنوان انگلیسی الزامی است'
-    })
-  }).required(),
+  title: multiLangStringSchema({
+    minLength: 3,
+    maxLength: 200,
+    required: true,
+    fieldName: 'عنوان'
+  }),
 
-  subtitle: Joi.object({
-    fa: Joi.string().allow(''),
-    en: Joi.string().allow('')
-  }).optional(),
+  subtitle: multiLangStringSchema({
+    allowEmpty: true,
+    fieldName: 'زیرعنوان'
+  }),
 
-  description: Joi.object({
-    fa: Joi.string().allow(''),
-    en: Joi.string().allow('')
-  }).optional(),
+  description: multiLangStringSchema({
+    allowEmpty: true,
+    fieldName: 'توضیحات'
+  }),
 
   image: Joi.string().required().messages({
     'any.required': 'تصویر اسلاید الزامی است'

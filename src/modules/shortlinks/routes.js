@@ -9,9 +9,10 @@ import { createShortLinkSchema, updateShortLinkSchema } from './validation.js';
 const router = Router();
 
 // Public routes
-router.get('/:code', ShortLinkController.redirectShortLink); // Redirect route (must be before JSON route)
-router.get('/:code/info', ShortLinkController.getShortLinkByCode); // Get info as JSON
+// IMPORTANT: More specific routes must come before less specific ones
+router.get('/:code/info', ShortLinkController.getShortLinkByCode); // Get info as JSON (must be before redirect route)
 router.get('/resource/:resourceType/:resourceId', ShortLinkController.getShortLinkByResource);
+router.get('/:code', ShortLinkController.redirectShortLink); // Redirect route (must be last)
 
 // Protected routes - Create short link (public can create)
 router.post(

@@ -1,40 +1,26 @@
 import Joi from 'joi';
+import {
+  slugSchema,
+  multiLangStringSchema,
+  objectIdSchema
+} from '../../shared/validations/baseValidation.js';
 
 export const createCategorySchema = Joi.object({
-  name: Joi.object({
-    fa: Joi.string().required().trim().min(2).max(100).messages({
-      'any.required': 'نام فارسی دسته‌بندی الزامی است'
-    }),
-    en: Joi.string().required().trim().min(2).max(100).messages({
-      'any.required': 'نام انگلیسی دسته‌بندی الزامی است'
-    })
-  }).required(),
+  name: multiLangStringSchema({
+    minLength: 2,
+    maxLength: 100,
+    required: true,
+    fieldName: 'نام دسته‌بندی'
+  }),
 
-  slug: Joi.object({
-    fa: Joi.string()
-      .required()
-      .trim()
-      .pattern(/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFa-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا فارسی فقط می‌تواند شامل حروف فارسی، حروف انگلیسی کوچک، اعداد و خط تیره باشد'
-      }),
-    en: Joi.string()
-      .required()
-      .trim()
-      .lowercase()
-      .pattern(/^[a-z0-9-]+$/)
-      .messages({
-        'string.pattern.base': 'آدرس یکتا انگلیسی فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد'
-      })
-  }).required(),
+  slug: slugSchema,
 
-  description: Joi.object({
-    fa: Joi.string().allow(''),
-    en: Joi.string().allow('')
-  }).optional(),
+  description: multiLangStringSchema({
+    allowEmpty: true,
+    fieldName: 'توضیحات'
+  }),
 
-  parent: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  parent: objectIdSchema('دسته‌بندی والد')
     .allow(null)
     .optional(),
 

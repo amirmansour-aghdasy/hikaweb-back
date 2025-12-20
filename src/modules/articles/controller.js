@@ -1,6 +1,7 @@
 import { ArticleService } from './service.js';
 import { Article } from './model.js';
 import { logger } from '../../utils/logger.js';
+import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
 
 export class ArticleController {
   /**
@@ -54,17 +55,12 @@ export class ArticleController {
    *         description: آدرس یکتا تکراری
    */
   static async createArticle(req, res, next) {
-    try {
-      const article = await ArticleService.createArticle(req.body, req.user.id);
-
-      res.status(201).json({
-        success: true,
-        message: req.t('articles.createSuccess'),
-        data: { article }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleCreate(
+      req, res, next,
+      ArticleService.createArticle,
+      'article',
+      'articles.createSuccess'
+    );
   }
 
   /**
@@ -127,16 +123,7 @@ export class ArticleController {
    *         description: لیست مقالات دریافت شد
    */
   static async getArticles(req, res, next) {
-    try {
-      const result = await ArticleService.getArticles(req.query);
-
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleGetList(req, res, next, ArticleService.getArticles);
   }
 
   /**
@@ -297,17 +284,12 @@ export class ArticleController {
    *         description: مقاله یافت نشد
    */
   static async updateArticle(req, res, next) {
-    try {
-      const article = await ArticleService.updateArticle(req.params.id, req.body, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('articles.updateSuccess'),
-        data: { article }
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleUpdate(
+      req, res, next,
+      ArticleService.updateArticle,
+      'article',
+      'articles.updateSuccess'
+    );
   }
 
   /**
@@ -331,16 +313,12 @@ export class ArticleController {
    *         description: مقاله یافت نشد
    */
   static async deleteArticle(req, res, next) {
-    try {
-      await ArticleService.deleteArticle(req.params.id, req.user.id);
-
-      res.json({
-        success: true,
-        message: req.t('articles.deleteSuccess')
-      });
-    } catch (error) {
-      next(error);
-    }
+    await handleDelete(
+      req, res, next,
+      ArticleService.deleteArticle,
+      'article',
+      'articles.deleteSuccess'
+    );
   }
 
   /**
@@ -520,7 +498,6 @@ export class ArticleController {
       if (existingLike) {
         // User already liked - remove the like (unlike)
         await ArticleLike.deleteOne({ _id: existingLike._id });
-        newLikesCount = Math.max(0, article.likes - 1);
         isLiked = false;
       } else {
         // User hasn't liked - add the like
@@ -529,13 +506,17 @@ export class ArticleController {
           user: userId || null,
           userIdentifier: userIdentifier
         });
-        newLikesCount = article.likes + 1;
         isLiked = true;
       }
 
-      // Update article likes count
-      article.likes = newLikesCount;
+      // Get actual count from ArticleLike collection (more accurate)
+      const actualLikesCount = await ArticleLike.countDocuments({ article: article._id });
+      
+      // Update article likes count to match actual count (ensures accuracy)
+      article.likes = actualLikesCount;
       await article.save();
+      
+      newLikesCount = actualLikesCount;
 
       res.json({
         success: true,
@@ -616,4 +597,5 @@ export class ArticleController {
       next(error);
     }
   }
+
 }
