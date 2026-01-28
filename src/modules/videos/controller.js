@@ -3,6 +3,7 @@ import { Video } from './model.js';
 import { AppError } from '../../utils/appError.js';
 import { HTTP_STATUS } from '../../utils/httpStatus.js';
 import { handleCreate, handleUpdate, handleDelete, handleGetList } from '../../shared/controllers/baseController.js';
+import { logger } from '../../utils/logger.js';
 
 export class VideoController {
   static async createVideo(req, res, next) {
@@ -38,8 +39,26 @@ export class VideoController {
 
   static async getVideoBySlug(req, res, next) {
     try {
-      const { slug } = req.params;
+      let { slug } = req.params;
+      logger.info(`Received slug param: "${slug}"`);
+      
+      // Express automatically decodes URL-encoded params, but ensure it's properly decoded
+      // Handle cases where slug might be double-encoded or have special characters
+      try {
+        // Try decoding - if it fails, slug is already decoded
+        const decoded = decodeURIComponent(slug);
+        logger.info(`Decoded slug: "${decoded}"`);
+        // Only use decoded version if it's different (meaning it was encoded)
+        if (decoded !== slug) {
+          slug = decoded;
+        }
+      } catch (e) {
+        // Slug is already decoded or invalid encoding - use as is
+        logger.debug('Slug already decoded or invalid encoding:', slug);
+      }
+      
       const language = req.query.lang || req.headers['accept-language']?.includes('en') ? 'en' : 'fa';
+      logger.info(`Using language: ${language}, final slug: "${slug}"`);
       
       const video = await VideoService.getVideoBySlug(slug, language);
 

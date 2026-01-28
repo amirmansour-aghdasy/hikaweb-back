@@ -473,6 +473,35 @@ export class AuthController {
   }
 
   /**
+   * Request OTP for changing phone number (authenticated users only)
+   * Checks if the new phone number is unique before sending OTP
+   */
+  static async requestPhoneChangeOTP(req, res, next) {
+    try {
+      const { phoneNumber } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'شماره موبایل الزامی است'
+        });
+      }
+
+      const result = await AuthService.requestOTPForPhoneChange(req.user.id, phoneNumber);
+
+      res.json({
+        success: true,
+        message: result.message || 'کد تایید ارسال شد',
+        data: {
+          expiresIn: result.expiresIn
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Verify phone number OTP and update user's phone number
    */
   static async verifyPhoneNumberOTP(req, res, next) {

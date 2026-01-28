@@ -12,7 +12,7 @@ export class SystemLogger {
     return await LogService.createSystemLog(
       'info',
       'startup',
-      'سیستم راه‌اندازی شد',
+      'System started',
       {},
       metadata
     );
@@ -25,7 +25,7 @@ export class SystemLogger {
     return await LogService.createSystemLog(
       'info',
       'shutdown',
-      'سیستم خاموش شد',
+      'System shut down',
       {},
       metadata
     );
@@ -39,7 +39,7 @@ export class SystemLogger {
     return await LogService.createSystemLog(
       level,
       'database',
-      `اتصال به دیتابیس: ${status === 'success' ? 'موفق' : 'ناموفق'}`,
+      `Database connection: ${status === 'success' ? 'success' : 'failed'}`,
       details,
       { status }
     );
@@ -53,7 +53,7 @@ export class SystemLogger {
     return await LogService.createSystemLog(
       level,
       'redis',
-      `اتصال به Redis: ${status === 'success' ? 'موفق' : 'ناموفق'}`,
+      `Redis connection: ${status === 'success' ? 'success' : 'failed'}`,
       details,
       { status }
     );
@@ -66,7 +66,7 @@ export class SystemLogger {
     return await LogService.createSystemLog(
       'error',
       'external_service',
-      `خطا در سرویس خارجی: ${service}`,
+      `External service error: ${service}`,
       { error: error.message, stack: error.stack, ...details },
       { service }
     );

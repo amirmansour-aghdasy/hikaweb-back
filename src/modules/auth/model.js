@@ -17,8 +17,12 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: true,
+      required: function () {
+        // Email is optional for OTP users (phone verified)
+        return !this.isPhoneNumberVerified;
+      },
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true
     },
@@ -31,7 +35,8 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: function () {
-        return !this.googleId;
+        // Password is optional for OTP users (phone verified) and Google users
+        return !this.googleId && !this.isPhoneNumberVerified;
       },
       minLength: 8,
       select: false

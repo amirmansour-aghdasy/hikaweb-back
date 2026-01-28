@@ -5,6 +5,7 @@ import { authenticate, optionalAuth } from '../../middleware/auth.js';
 import { authorize } from '../../middleware/authorization.js';
 import { auditLog } from '../../middleware/audit.js';
 import { sanitizeHTML } from '../../middleware/validation.js';
+import { commentLimiter } from '../../middleware/rateLimit.js';
 import { createCommentSchema, updateCommentSchema, moderateCommentSchema } from './validation.js';
 
 const router = Router();
@@ -16,6 +17,7 @@ router.get('/:referenceType/:referenceId', CommentController.getCommentsByRefere
 router.post(
   '/',
   optionalAuth,
+  commentLimiter,
   validate(createCommentSchema),
   sanitizeHTML(['content']),
   auditLog('CREATE_COMMENT', 'comment'),

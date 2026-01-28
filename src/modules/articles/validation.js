@@ -32,6 +32,14 @@ export const createArticleSchema = Joi.object({
 
   featuredImage: Joi.string().optional(),
 
+  introVideo: Joi.object({
+    url: Joi.string().uri().allow('').optional(),
+    thumbnailUrl: Joi.string().uri().allow('').optional(),
+    duration: Joi.number().min(0).optional(),
+    fileSize: Joi.number().min(0).optional(),
+    format: Joi.string().valid('mp4', 'webm', 'm3u8').default('mp4').optional()
+  }).optional(),
+
   categories: categoryArraySchema({
     minItems: 1,
     required: true
@@ -41,6 +49,11 @@ export const createArticleSchema = Joi.object({
 
   isPublished: booleanSchema(false),
   isFeatured: booleanSchema(false),
+  isPremium: booleanSchema(false),
+  relatedProduct: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).allow(null).optional()
+    .messages({
+      'string.pattern.base': 'شناسه محصول معتبر نیست'
+    }),
 
   seo: seoSchema,
 
@@ -58,6 +71,42 @@ export const createArticleSchema = Joi.object({
     fileSize: Joi.number().min(0).optional(),
     fileType: Joi.string().allow('').optional(),
     isActive: Joi.boolean().default(false)
+  }).optional(),
+
+  digitalContent: Joi.object({
+    mainPdf: Joi.object({
+      url: Joi.string().uri().allow('').optional(),
+      fileName: Joi.string().allow('').optional(),
+      fileSize: Joi.number().min(0).optional(),
+      mimeType: Joi.string().default('application/pdf').optional()
+    }).optional(),
+    videos: Joi.array().items(
+      Joi.object({
+        title: Joi.object({
+          fa: Joi.string().allow('').optional(),
+          en: Joi.string().allow('').optional()
+        }).optional(),
+        url: Joi.string().uri().required(),
+        thumbnailUrl: Joi.string().uri().allow('').optional(),
+        duration: Joi.number().min(0).optional(),
+        fileSize: Joi.number().min(0).optional(),
+        format: Joi.string().valid('mp4', 'webm', 'm3u8').default('mp4').optional(),
+        order: Joi.number().default(0).optional()
+      })
+    ).optional(),
+    attachments: Joi.array().items(
+      Joi.object({
+        title: Joi.object({
+          fa: Joi.string().allow('').optional(),
+          en: Joi.string().allow('').optional()
+        }).optional(),
+        url: Joi.string().uri().required(),
+        fileName: Joi.string().allow('').optional(),
+        fileSize: Joi.number().min(0).optional(),
+        mimeType: Joi.string().default('application/pdf').optional(),
+        order: Joi.number().default(0).optional()
+      })
+    ).optional()
   }).optional()
 });
 

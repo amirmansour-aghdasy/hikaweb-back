@@ -25,6 +25,8 @@ router.get('/', optionalAuth, ArticleController.getArticles);
 router.get('/featured', ArticleController.getFeaturedArticles);
 router.get('/popular', ArticleController.getPopularArticles);
 router.get('/slug/:slug', optionalAuth, ArticleController.getArticleBySlug);
+router.get('/product/:productId', optionalAuth, ArticleController.getArticleByProduct);
+router.get('/:id/buyer-count', optionalAuth, ArticleController.getBuyerCount);
 
 // Public rating routes (no auth required)
 router.post('/:id/rate', optionalAuth, validate(rateArticleSchema), ArticleRatingController.rateArticle);
@@ -78,5 +80,8 @@ router.delete(
 // Bookmark routes (require auth)
 router.post('/:id/bookmark', authenticate, auditLog('TOGGLE_BOOKMARK', 'bookmarks'), BookmarkController.toggleBookmark);
 router.get('/:id/bookmark/check', authenticate, BookmarkController.checkBookmark);
+
+// Download routes (require auth and purchase)
+router.get('/:id/download-zip', authenticate, ArticleController.downloadArticleZip);
 
 export default router;

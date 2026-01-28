@@ -1,9 +1,18 @@
 import { Article } from './model.js';
 import { ArticleView } from './articleViewModel.js';
 import { Portfolio } from '../portfolio/model.js';
+import { Category } from '../categories/model.js';
 import { logger } from '../../utils/logger.js';
 import { BaseService } from '../../shared/services/baseService.js';
 import crypto from 'crypto';
+
+// Premium article categories (articles in these categories are automatically premium)
+const PREMIUM_CATEGORY_NAMES = [
+  'ایده کسب و کار',
+  'استراتژی کسب و کار',
+  'business-idea',
+  'business-strategy'
+];
 
 export class ArticleService extends BaseService {
   constructor() {
@@ -17,6 +26,43 @@ export class ArticleService extends BaseService {
       }
     });
   }
+  /**
+   * Check if article belongs to premium categories
+   * @param {Array} categoryIds - Array of category IDs
+   * @returns {Promise<Boolean>}
+   */
+  static async checkIsPremiumCategory(categoryIds) {
+    if (!categoryIds || categoryIds.length === 0) {
+      return false;
+    }
+
+    try {
+      const categories = await Category.find({
+        _id: { $in: categoryIds },
+        deletedAt: null
+      }).select('name slug');
+
+      // Check if any category name or slug matches premium categories
+      return categories.some(category => {
+        const nameFa = category.name?.fa?.toLowerCase() || '';
+        const nameEn = category.name?.en?.toLowerCase() || '';
+        const slugFa = category.slug?.fa?.toLowerCase() || '';
+        const slugEn = category.slug?.en?.toLowerCase() || '';
+
+        return PREMIUM_CATEGORY_NAMES.some(premiumName => {
+          const premiumLower = premiumName.toLowerCase();
+          return nameFa.includes(premiumLower) || 
+                 nameEn.includes(premiumLower) || 
+                 slugFa.includes(premiumLower) || 
+                 slugEn.includes(premiumLower);
+        });
+      });
+    } catch (error) {
+      logger.error('Error checking premium categories:', error);
+      return false;
+    }
+  }
+
   static async createArticle(articleData, userId) {
     try {
       const service = new ArticleService();
@@ -26,6 +72,64 @@ export class ArticleService extends BaseService {
       
       // Validate categories using BaseService
       await service.validateCategories(articleData.categories);
+
+      // Auto-set isPremium based on categories
+      // Only set if not explicitly provided in articleData
+      if (!articleData.hasOwnProperty('isPremium') && articleData.categories) {
+        const isPremiumCategory = await ArticleService.checkIsPremiumCategory(articleData.categories);
+        articleData.isPremium = isPremiumCategory;
+      }
+
+      // If article is premium and no relatedProduct is provided, create a product automatically
+      if (articleData.isPremium && !articleData.relatedProduct) {
+        const { ProductService } = await import('../products/service.js');
+        
+        // Generate SKU for the product
+        const sku = `ART-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        
+        // Create product data based on article
+        const productData = {
+          name: {
+            fa: articleData.title?.fa || articleData.title || 'محصول مقاله',
+            en: articleData.title?.en || articleData.title || 'Article Product'
+          },
+          slug: {
+            fa: articleData.slug?.fa || articleData.slug || '',
+            en: articleData.slug?.en || articleData.slug || ''
+          },
+          sku: sku,
+          type: 'digital',
+          digitalProduct: {
+            contentType: 'article'
+          },
+          shortDescription: {
+            fa: articleData.excerpt?.fa || articleData.excerpt || '',
+            en: articleData.excerpt?.en || articleData.excerpt || ''
+          },
+          description: {
+            fa: articleData.content?.fa || articleData.content || '',
+            en: articleData.content?.en || articleData.content || ''
+          },
+          featuredImage: articleData.featuredImage || '',
+          pricing: {
+            basePrice: 0, // Default price, should be set by admin
+            isOnSale: false
+          },
+          inventory: {
+            quantity: null, // Unlimited for digital products
+            trackInventory: false,
+            allowBackorder: true
+          },
+          isPublished: articleData.isPublished || false,
+          status: 'active'
+        };
+
+        // Create the product
+        const product = await ProductService.createProduct(productData, userId);
+        articleData.relatedProduct = product._id;
+        
+        logger.info(`Auto-created product for premium article: ${product.name.fa}`);
+      }
 
       const article = new Article({
         ...articleData,
@@ -68,6 +172,16 @@ export class ArticleService extends BaseService {
       // Validate categories if provided using BaseService
       if (updateData.categories) {
         await service.validateCategories(updateData.categories);
+        
+        // Auto-update isPremium based on categories if not explicitly set
+        if (!updateData.hasOwnProperty('isPremium')) {
+          const isPremiumCategory = await ArticleService.checkIsPremiumCategory(updateData.categories);
+          updateData.isPremium = isPremiumCategory;
+        }
+      } else if (!updateData.hasOwnProperty('isPremium') && article.categories) {
+        // If categories not updated but isPremium not set, re-check existing categories
+        const isPremiumCategory = await ArticleService.checkIsPremiumCategory(article.categories);
+        updateData.isPremium = isPremiumCategory;
       }
 
       // Handle publish status change
@@ -77,6 +191,57 @@ export class ArticleService extends BaseService {
         } else if (!updateData.isPublished && article.isPublished) {
           updateData.publishedAt = null;
         }
+      }
+
+      // If article is being set to premium and no relatedProduct exists, create one
+      if (updateData.isPremium && !updateData.relatedProduct && !article.relatedProduct) {
+        const { ProductService } = await import('../products/service.js');
+        
+        // Generate SKU for the product
+        const sku = `ART-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        
+        // Create product data based on article
+        const productData = {
+          name: {
+            fa: article.title?.fa || article.title || 'محصول مقاله',
+            en: article.title?.en || article.title || 'Article Product'
+          },
+          slug: {
+            fa: article.slug?.fa || article.slug || '',
+            en: article.slug?.en || article.slug || ''
+          },
+          sku: sku,
+          type: 'digital',
+          digitalProduct: {
+            contentType: 'article'
+          },
+          shortDescription: {
+            fa: article.excerpt?.fa || article.excerpt || '',
+            en: article.excerpt?.en || article.excerpt || ''
+          },
+          description: {
+            fa: article.content?.fa || article.content || '',
+            en: article.content?.en || article.content || ''
+          },
+          featuredImage: article.featuredImage || '',
+          pricing: {
+            basePrice: 0, // Default price, should be set by admin
+            isOnSale: false
+          },
+          inventory: {
+            quantity: null, // Unlimited for digital products
+            trackInventory: false,
+            allowBackorder: true
+          },
+          isPublished: article.isPublished || false,
+          status: 'active'
+        };
+
+        // Create the product
+        const product = await ProductService.createProduct(productData, userId);
+        updateData.relatedProduct = product._id;
+        
+        logger.info(`Auto-created product for premium article: ${product.name.fa}`);
       }
 
       // Track image usage changes using BaseService
@@ -238,7 +403,119 @@ export class ArticleService extends BaseService {
     }
   }
 
-  static async getArticleBySlug(slug, language = 'fa') {
+  /**
+   * Check if user has purchased the article (via related product)
+   * @param {string} articleId - Article ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Boolean>}
+   */
+  static async hasUserPurchasedArticle(articleId, userId) {
+    if (!userId || !articleId) {
+      return false;
+    }
+
+    try {
+      const article = await Article.findById(articleId).select('relatedProduct');
+      if (!article || !article.relatedProduct) {
+        return false;
+      }
+
+      const { Order } = await import('../orders/model.js');
+      
+      // Check if user has a completed/delivered order containing the related product
+      // For digital products, 'delivered' status means purchase is complete
+      const order = await Order.findOne({
+        user: userId,
+        'items.product': article.relatedProduct,
+        status: { $in: ['delivered', 'processing', 'shipped'] }, // All paid statuses count as purchased
+        'payment.status': 'completed',
+        deletedAt: null
+      });
+
+      return !!order;
+    } catch (error) {
+      logger.error('Error checking article purchase:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get count of unique buyers for an article (via related product)
+   * @param {string} articleId - Article ID
+   * @returns {Promise<number>} Count of unique buyers
+   */
+  static async getBuyerCount(articleId) {
+    try {
+      const article = await Article.findById(articleId).select('relatedProduct');
+      if (!article || !article.relatedProduct) {
+        return 0;
+      }
+
+      const { Order } = await import('../orders/model.js');
+      
+      // Count distinct users who have purchased the related product
+      const buyerCount = await Order.distinct('user', {
+        'items.product': article.relatedProduct,
+        status: { $in: ['delivered', 'processing', 'shipped'] },
+        'payment.status': 'completed',
+        deletedAt: null
+      });
+
+      return buyerCount.length || 0;
+    } catch (error) {
+      logger.error('Error getting buyer count:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get preview content (20-30% of article)
+   * @param {string} content - Full article content
+   * @param {number} percentage - Percentage to show (default: 25)
+   * @returns {string} Preview content
+   */
+  static getPreviewContent(content, percentage = 25) {
+    if (!content) {
+      return '';
+    }
+
+    // Calculate approximate character count for percentage
+    const totalLength = content.length;
+    const previewLength = Math.floor((totalLength * percentage) / 100);
+    
+    // Try to cut at a sentence boundary (prefer Persian/Farsi sentence endings)
+    const sentenceEndings = /[.!?۔؟]\s+/;
+    const preview = content.substring(0, previewLength);
+    
+    // Find last sentence ending in preview
+    const lastSentenceEnd = preview.lastIndexOf('.');
+    const lastQuestionMark = preview.lastIndexOf('؟');
+    const lastExclamation = preview.lastIndexOf('!');
+    
+    const lastEnding = Math.max(lastSentenceEnd, lastQuestionMark, lastExclamation);
+    
+    if (lastEnding > previewLength * 0.7) {
+      // If we found a sentence ending reasonably close to target, use it
+      return content.substring(0, lastEnding + 1);
+    }
+    
+    // Otherwise, try to cut at paragraph boundary
+    const lastParagraph = preview.lastIndexOf('\n\n');
+    if (lastParagraph > previewLength * 0.5) {
+      return content.substring(0, lastParagraph);
+    }
+    
+    // Fallback: cut at word boundary
+    const lastSpace = preview.lastIndexOf(' ');
+    if (lastSpace > previewLength * 0.8) {
+      return content.substring(0, lastSpace);
+    }
+    
+    // Final fallback: return exact preview length
+    return preview;
+  }
+
+  static async getArticleBySlug(slug, language = 'fa', userId = null) {
     try {
       const article = await Article.findOne({
         [`slug.${language}`]: slug,
@@ -246,16 +523,42 @@ export class ArticleService extends BaseService {
         deletedAt: null
       })
         .populate('author', 'name email avatar')
-        .populate('categories', 'name slug');
+        .populate('categories', 'name slug')
+        .populate('relatedProduct', 'name slug pricing type digitalProduct');
 
       if (!article) {
         throw new Error('مقاله یافت نشد');
       }
 
+      // Check if user has purchased the article
+      let hasAccess = false;
+      if (userId && article.isPremium && article.relatedProduct) {
+        hasAccess = await ArticleService.hasUserPurchasedArticle(article._id, userId);
+      } else if (!article.isPremium) {
+        // Non-premium articles are always accessible
+        hasAccess = true;
+      }
+
+      // Convert to object for manipulation
+      const articleObj = article.toObject();
+
+      // If article is premium and user doesn't have access, show preview only
+      if (article.isPremium && !hasAccess) {
+        articleObj.content = {
+          fa: ArticleService.getPreviewContent(article.content?.fa || '', 25),
+          en: ArticleService.getPreviewContent(article.content?.en || '', 25)
+        };
+        articleObj.isPreview = true;
+        articleObj.hasAccess = false;
+      } else {
+        articleObj.isPreview = false;
+        articleObj.hasAccess = true;
+      }
+
       // Don't increment view count here - use trackView endpoint instead
       // This ensures unique view tracking
 
-      return article;
+      return articleObj;
     } catch (error) {
       logger.error('Get article by slug error:', error);
       throw error;
@@ -586,6 +889,121 @@ export class ArticleService extends BaseService {
       }
     } catch (error) {
       logger.error('Sync article stats error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Download article digital content as ZIP
+   * @param {string} articleId - Article ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} ZIP file stream and metadata
+   */
+  static async downloadArticleZip(articleId, userId) {
+    try {
+      if (!userId) {
+        throw new Error('برای دانلود باید وارد شوید');
+      }
+
+      // Check if user has purchased the article
+      const hasPurchased = await ArticleService.hasUserPurchasedArticle(articleId, userId);
+      if (!hasPurchased) {
+        throw new Error('شما این مقاله را خریداری نکرده‌اید');
+      }
+
+      // Get article with digital content
+      const article = await Article.findById(articleId)
+        .populate('relatedProduct', 'name slug');
+
+      if (!article) {
+        throw new Error('مقاله یافت نشد');
+      }
+
+      if (!article.digitalContent) {
+        throw new Error('محتوای دیجیتال برای این مقاله موجود نیست');
+      }
+
+      const archiver = (await import('archiver')).default;
+      const axios = (await import('axios')).default;
+      const { Readable } = await import('stream');
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Maximum compression
+      });
+
+      const files = [];
+      const articleTitle = article.title?.fa || article.title?.en || 'article';
+      const sanitizedTitle = articleTitle.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+
+      // Add main PDF if exists
+      if (article.digitalContent.mainPdf?.url) {
+        files.push({
+          url: article.digitalContent.mainPdf.url,
+          name: article.digitalContent.mainPdf.fileName || `${sanitizedTitle}.pdf`,
+          path: `${sanitizedTitle}.pdf`
+        });
+      }
+
+      // Add videos
+      if (article.digitalContent.videos && article.digitalContent.videos.length > 0) {
+        article.digitalContent.videos.forEach((video, index) => {
+          const videoTitle = video.title?.fa || video.title?.en || `video_${index + 1}`;
+          const sanitizedVideoTitle = videoTitle.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+          const extension = video.format || 'mp4';
+          files.push({
+            url: video.url,
+            name: `${sanitizedVideoTitle}.${extension}`,
+            path: `videos/${sanitizedVideoTitle}.${extension}`
+          });
+        });
+      }
+
+      // Add attachments
+      if (article.digitalContent.attachments && article.digitalContent.attachments.length > 0) {
+        article.digitalContent.attachments.forEach((attachment, index) => {
+          const attachmentTitle = attachment.title?.fa || attachment.title?.en || `attachment_${index + 1}`;
+          const sanitizedAttachmentTitle = attachmentTitle.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+          const fileName = attachment.fileName || `${sanitizedAttachmentTitle}.pdf`;
+          files.push({
+            url: attachment.url,
+            name: fileName,
+            path: `attachments/${fileName}`
+          });
+        });
+      }
+
+      if (files.length === 0) {
+        throw new Error('فایلی برای دانلود موجود نیست');
+      }
+
+      // Download files and add to ZIP
+      for (const file of files) {
+        try {
+          const response = await axios.get(file.url, {
+            responseType: 'stream',
+            timeout: 30000 // 30 seconds timeout
+          });
+
+          archive.append(response.data, { name: file.path });
+        } catch (downloadError) {
+          logger.error(`Error downloading file ${file.url}:`, downloadError);
+          // Continue with other files even if one fails
+        }
+      }
+
+      // Finalize archive
+      archive.finalize();
+
+      logger.info(`Article ZIP download initiated: ${articleId}, user: ${userId}, files: ${files.length}`);
+
+      return {
+        stream: archive,
+        filename: `${sanitizedTitle}_${Date.now()}.zip`,
+        filesCount: files.length
+      };
+    } catch (error) {
+      logger.error('Download article ZIP error:', error);
       throw error;
     }
   }

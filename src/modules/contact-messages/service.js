@@ -15,37 +15,37 @@ export class ContactMessageService {
       const contactMessage = new ContactMessage(messageData);
       await contactMessage.save();
 
-      // Notify all admin users about new contact message
+      // Notify all users with dashboard access (higher than regular user) about new contact message
       try {
-        // Find admin and super_admin roles
-        const adminRoles = await Role.find({
-          name: { $in: ['admin', 'super_admin'] },
+        // Find roles with dashboard access: admin, super_admin, editor, moderator
+        const dashboardRoles = await Role.find({
+          name: { $in: ['admin', 'super_admin', 'editor', 'moderator'] },
           deletedAt: null
         }).select('_id').lean();
 
-        const adminRoleIds = adminRoles.map(role => role._id);
+        const dashboardRoleIds = dashboardRoles.map(role => role._id);
 
-        // Find all users with admin roles
-        const adminUsers = await User.find({
-          role: { $in: adminRoleIds },
+        // Find all users with dashboard access roles
+        const dashboardUsers = await User.find({
+          role: { $in: dashboardRoleIds },
           deletedAt: null
         }).select('_id').lean();
 
-        const adminUserIds = adminUsers.map(user => user._id);
+        const dashboardUserIds = dashboardUsers.map(user => user._id);
 
-        if (adminUserIds.length > 0) {
+        if (dashboardUserIds.length > 0) {
           await Notification.insertMany(
-            adminUserIds.map(adminId => ({
-              type: 'other',
+            dashboardUserIds.map(userId => ({
+              type: 'contact_message_new',
               title: {
                 fa: 'پیام تماس با ما جدید',
                 en: 'New Contact Message'
               },
               message: {
-                fa: `پیام جدید از ${contactMessage.fullName} (${contactMessage.email})`,
-                en: `New message from ${contactMessage.fullName} (${contactMessage.email})`
+                fa: `پیام جدید از ${contactMessage.fullName}${contactMessage.email ? ` (${contactMessage.email})` : ''}`,
+                en: `New message from ${contactMessage.fullName}${contactMessage.email ? ` (${contactMessage.email})` : ''}`
               },
-              recipient: adminId,
+              recipient: userId,
               relatedEntity: {
                 type: 'other',
                 id: contactMessage._id
@@ -54,7 +54,7 @@ export class ContactMessageService {
               actionUrl: `/dashboard/contact-messages`
             }))
           );
-          logger.info(`Notifications sent to ${adminUserIds.length} admin users for contact message: ${contactMessage._id}`);
+          logger.info(`Notifications sent to ${dashboardUserIds.length} dashboard users for contact message: ${contactMessage._id}`);
         }
       } catch (notificationError) {
         // Don't fail the message creation if notification fails
@@ -183,6 +183,21 @@ export class ContactMessageService {
       }
 
       await message.markAsRead(userId);
+      
+      // Delete notification for ALL users when someone marks message as read
+      // This is a public notification - when one person reads it, it's removed for everyone
+      try {
+        await Notification.deleteMany({
+          type: 'contact_message_new',
+          'relatedEntity.type': 'other',
+          'relatedEntity.id': message._id
+        });
+        logger.info(`Notifications deleted for all users when contact message ${id} was marked as read by user ${userId}`);
+      } catch (notificationError) {
+        // Don't fail the read operation if notification deletion fails
+        logger.error('Error deleting notifications for contact message:', notificationError);
+      }
+      
       logger.info(`Contact message marked as read: ${id} by user: ${userId}`);
       return message;
     } catch (error) {

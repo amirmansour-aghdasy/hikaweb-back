@@ -98,14 +98,34 @@ export const createSimpleConsultationSchema = Joi.object({
     'string.email': 'فرمت ایمیل صحیح نیست'
   }),
   serviceId: Joi.string()
-    .required()
     .pattern(/^[0-9a-fA-F]{24}$/)
+    .optional()
     .messages({
-      'any.required': 'خدمت الزامی است',
       'string.pattern.base': 'شناسه خدمت نامعتبر است'
-    })
-}).or('fullName', 'firstName').messages({
-  'object.missing': 'نام و نام خانوادگی الزامی است'
+    }),
+  productId: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .optional()
+    .messages({
+      'string.pattern.base': 'شناسه محصول نامعتبر است'
+    }),
+  type: Joi.string()
+    .valid('service', 'product')
+    .optional()
+    .default('service')
+}).or('fullName', 'firstName').custom((value, helpers) => {
+  // At least one of serviceId or productId must be provided
+  if (!value.serviceId && !value.productId) {
+    return helpers.error('any.custom', { message: 'باید یا serviceId یا productId را ارسال کنید' });
+  }
+  // Both cannot be provided at the same time
+  if (value.serviceId && value.productId) {
+    return helpers.error('any.custom', { message: 'نمی‌توانید همزمان serviceId و productId را ارسال کنید' });
+  }
+  return value;
+}).messages({
+  'object.missing': 'نام و نام خانوادگی الزامی است',
+  'any.custom': 'باید یا serviceId یا productId را ارسال کنید'
 });
 
 export const updateConsultationSchema = Joi.object({

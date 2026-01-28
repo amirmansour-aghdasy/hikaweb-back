@@ -31,7 +31,7 @@ const commentSchema = new mongoose.Schema(
     resourceType: {
       type: String,
       required: true,
-      enum: ['Service', 'Portfolio', 'Article', 'Video']
+      enum: ['Service', 'Portfolio', 'Article', 'Video', 'Product']
     },
 
     resourceId: {

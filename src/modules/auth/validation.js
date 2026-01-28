@@ -248,6 +248,16 @@ export const updateProfileSchema = Joi.object({
     .optional()
 });
 
+export const requestPhoneChangeOTPSchema = Joi.object({
+  phoneNumber: Joi.string()
+    .pattern(/^(\+98|0)?9\d{9}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'شماره موبایل صحیح نیست',
+      'any.required': 'شماره موبایل الزامی است'
+    })
+});
+
 export const verifyPhoneNumberOTPSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^(\+98|0)?9\d{9}$/)

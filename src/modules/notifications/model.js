@@ -27,6 +27,17 @@ const notificationSchema = new mongoose.Schema(
         'task_assigned',
         'task_updated',
         'calendar_event',
+        'cart_expiring',
+        'cart_expired',
+        'order_created',
+        'order_status_changed',
+        'order_paid',
+        'order_shipped',
+        'order_delivered',
+        'order_cancelled',
+        'payment_success',
+        'payment_failed',
+        'contact_message_new',
         'system_alert',
         'other'
       ]
@@ -51,7 +62,7 @@ const notificationSchema = new mongoose.Schema(
     relatedEntity: {
       type: {
         type: String,
-        enum: ['comment', 'ticket', 'consultation', 'article', 'service', 'portfolio', 'user', 'other']
+        enum: ['comment', 'ticket', 'consultation', 'article', 'service', 'portfolio', 'user', 'cart', 'order', 'payment', 'other']
       },
       id: mongoose.Schema.Types.ObjectId
     },

@@ -41,10 +41,22 @@ const consultationSchema = new mongoose.Schema(
     services: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Service',
-        required: true
+        ref: 'Service'
       }
     ],
+
+    // Product consultation (for product pre-purchase consultation)
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product'
+    },
+
+    // Consultation type
+    type: {
+      type: String,
+      enum: ['service', 'product'],
+      default: 'service'
+    },
 
     projectDescription: {
       type: String,
@@ -177,6 +189,8 @@ consultationSchema.index({ requestStatus: 1 });
 consultationSchema.index({ assignedTo: 1 });
 consultationSchema.index({ user: 1 });
 consultationSchema.index({ services: 1 });
+consultationSchema.index({ product: 1 });
+consultationSchema.index({ type: 1 });
 consultationSchema.index({ createdAt: -1 });
 consultationSchema.index({ leadSource: 1 });
 consultationSchema.index({ fullName: 'text', 'company.name': 'text' });

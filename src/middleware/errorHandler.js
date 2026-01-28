@@ -31,7 +31,7 @@ export const errorHandler = async (err, req, res, next) => {
   // Log critical errors to MongoDB System Log
   if (err.statusCode >= 500 || !err.statusCode) {
     await SystemLogger.logCriticalError(
-      `خطای سیستم: ${err.message}`,
+      `System error: ${err.message}`,
       err,
       {
         url: req.originalUrl,

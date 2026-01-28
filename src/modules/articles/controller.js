@@ -194,8 +194,9 @@ export class ArticleController {
     try {
       const { slug } = req.params;
       const language = req.query.lang || req.language || 'fa';
+      const userId = req.user?.id || null;
 
-      const article = await ArticleService.getArticleBySlug(slug, language);
+      const article = await ArticleService.getArticleBySlug(slug, language, userId);
 
       // Get related content in parallel
       const [relatedArticles, relatedVideos, relatedPortfolios] = await Promise.all([
@@ -213,16 +214,16 @@ export class ArticleController {
 
       // Get bookmark status if user is authenticated
       let isBookmarked = false;
-      if (req.user?.id) {
+      if (userId) {
         const { BookmarkService } = await import('../bookmarks/service.js');
-        isBookmarked = await BookmarkService.isBookmarked(article._id, req.user.id);
+        isBookmarked = await BookmarkService.isBookmarked(article._id, userId);
       }
 
       res.json({
         success: true,
         data: {
           article: {
-            ...article.toObject(),
+            ...article,
             userRating,
             isBookmarked
           },
@@ -594,6 +595,119 @@ export class ArticleController {
         }
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Download article digital content as ZIP
+   * GET /api/v1/articles/:id/download-zip
+   */
+  static async downloadArticleZip(req, res, next) {
+    try {
+      const { id: articleId } = req.params;
+      const userId = req.user?.id || req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'برای دانلود باید وارد شوید'
+        });
+      }
+
+      const result = await ArticleService.downloadArticleZip(articleId, userId);
+
+      // Set headers for ZIP download
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(result.filename)}"`);
+      res.setHeader('X-Files-Count', result.filesCount.toString());
+
+      // Pipe ZIP stream to response
+      result.stream.pipe(res);
+
+      // Handle errors
+      result.stream.on('error', (error) => {
+        logger.error('ZIP stream error:', error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'خطا در ایجاد فایل ZIP'
+          });
+        }
+      });
+
+      // Log completion
+      result.stream.on('end', () => {
+        logger.info(`Article ZIP download completed: ${articleId}, user: ${userId}`);
+      });
+    } catch (error) {
+      logger.error('Download article ZIP error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get article by related product ID
+   * GET /api/v1/articles/product/:productId
+   */
+  static async getArticleByProduct(req, res, next) {
+    try {
+      const { productId } = req.params;
+      const userId = req.user?.id || null;
+
+      const article = await Article.findOne({
+        relatedProduct: productId,
+        isPublished: true,
+        deletedAt: null
+      })
+        .select('_id title slug digitalContent relatedProduct')
+        .lean();
+
+      if (!article) {
+        return res.status(404).json({
+          success: false,
+          message: 'مقاله مرتبط یافت نشد'
+        });
+      }
+
+      // Check if user has purchased
+      let hasPurchased = false;
+      if (userId) {
+        hasPurchased = await ArticleService.hasUserPurchasedArticle(article._id, userId);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          article: {
+            ...article,
+            hasPurchased
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Get article by product error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get buyer count for an article
+   * GET /api/v1/articles/:id/buyer-count
+   */
+  static async getBuyerCount(req, res, next) {
+    try {
+      const { id: articleId } = req.params;
+      const buyerCount = await ArticleService.getBuyerCount(articleId);
+      
+      res.json({
+        success: true,
+        data: {
+          buyerCount
+        }
+      });
+    } catch (error) {
+      logger.error('Get buyer count error:', error);
       next(error);
     }
   }

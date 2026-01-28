@@ -16,22 +16,24 @@ const contactMessageSchema = new mongoose.Schema(
 
     email: {
       type: String,
-      required: [true, 'ایمیل الزامی است'],
+      required: false,
       trim: true,
       lowercase: true,
+      default: null,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'ایمیل معتبر وارد کنید']
     },
 
     phoneNumber: {
       type: String,
       required: [true, 'شماره موبایل الزامی است'],
-      match: [/^(\+98|0)?9\d{9}$/, 'شماره موبایل معتبر وارد کنید']
+      match: [/^(09)(10|11|12|13|14|15|16|17|18|19|90|91|92|93|94|30|33|35|36|37|38|39|00|01|02|03|04|05|41|42|20|21|22|32|31|34)\d{7}$/, 'شماره موبایل معتبر وارد کنید']
     },
 
     message: {
       type: String,
-      required: [true, 'پیام الزامی است'],
+      required: false,
       trim: true,
+      default: null,
       maxLength: [2000, 'پیام نمی‌تواند بیش از ۲۰۰۰ کاراکتر باشد']
     },
 

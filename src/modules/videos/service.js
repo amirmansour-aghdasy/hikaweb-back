@@ -8,6 +8,8 @@ import { Service } from '../services/model.js';
 import { Comment } from '../comments/model.js';
 import { logger } from '../../utils/logger.js';
 import { BaseService } from '../../shared/services/baseService.js';
+import { generateSlugs, ensureUniqueSlug } from '../../utils/slugGenerator.js';
+import { Category } from '../categories/model.js';
 import crypto from 'crypto';
 
 export class VideoService extends BaseService {
@@ -109,6 +111,9 @@ export class VideoService extends BaseService {
       });
 
       await video.save();
+      
+      // Create service instance for cache operations
+      const service = new VideoService();
       await service.populateDocument(video);
 
       // Invalidate cache using BaseService
@@ -335,7 +340,13 @@ export class VideoService extends BaseService {
 
   static async getVideoBySlug(slug, language = 'fa') {
     try {
-      const video = await Video.findOne({
+      // Normalize slug: trim and ensure it's a string
+      slug = String(slug).trim();
+      
+      logger.info(`Searching for video with slug: "${slug}" in language: ${language}`);
+      
+      // Try exact match first
+      let video = await Video.findOne({
         [`slug.${language}`]: slug,
         isPublished: true,
         deletedAt: null
@@ -345,6 +356,32 @@ export class VideoService extends BaseService {
         .populate('relatedServices', 'name slug featuredImage')
         .populate('relatedPortfolios', 'title slug featuredImage')
         .populate('relatedArticles', 'title slug featuredImage');
+
+      // If not found, try case-insensitive search (for debugging)
+      if (!video) {
+        logger.warn(`Exact match not found for slug: "${slug}". Trying case-insensitive search...`);
+        const allVideos = await Video.find({ isPublished: true, deletedAt: null })
+          .select(`title slug.${language}`)
+          .limit(10)
+          .lean();
+        
+        logger.warn(`Available slugs in ${language}:`, allVideos.map(v => ({
+          title: v.title?.[language] || v.title,
+          slug: v.slug?.[language]
+        })));
+        
+        // Try case-insensitive match
+        video = await Video.findOne({
+          [`slug.${language}`]: { $regex: new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          isPublished: true,
+          deletedAt: null
+        })
+          .populate('author', 'name email avatar')
+          .populate('categories', 'name slug')
+          .populate('relatedServices', 'name slug featuredImage')
+          .populate('relatedPortfolios', 'title slug featuredImage')
+          .populate('relatedArticles', 'title slug featuredImage');
+      }
 
       if (!video) {
         throw new Error('ویدئو یافت نشد');

@@ -8,6 +8,7 @@ import {
   } from './middleware/errorHandler.js';  
 import swaggerUi from 'swagger-ui-express';
 import { logger } from './utils/logger.js';
+import { PrettyLogger } from './utils/prettyLogger.js';
 import { Database } from './config/database.js';
 import { redisClient } from './config/redis.js';
 import { config } from './config/environment.js';
@@ -51,6 +52,12 @@ import articleRatingRoutes from './modules/articleRatings/routes.js';
 import contactMessageRoutes from './modules/contact-messages/routes.js';
 import shortLinkRoutes from './modules/shortlinks/routes.js';
 import videoRoutes from './modules/videos/routes.js';
+import cartRoutes from './modules/cart/routes.js';
+import productRoutes from './modules/products/routes.js';
+import orderRoutes from './modules/orders/routes.js';
+import paymentRoutes from './modules/payments/routes.js';
+import shippingRoutes from './modules/shipping/routes.js';
+import couponRoutes from './modules/coupons/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -69,19 +76,27 @@ class App {
         uri: config.MONGODB_URI?.replace(/\/\/.*@/, '//***@') // Hide credentials
       });
       
+      const connections = [
+        { name: 'MongoDB', status: 'success' }
+      ];
+      
       try {
         await redisClient.connect();
         await SystemLogger.logRedisConnection('success');
+        connections.push({ name: 'Redis', status: 'success' });
       } catch (redisError) {
         logger.warn('Redis unavailable, continuing without cache');
         await SystemLogger.logRedisConnection('failed', {
           error: redisError.message
         });
+        connections.push({ name: 'Redis', status: 'failed' });
       }
       
-      logger.info('✅ Database connections established');
+      // Display connection status
+      PrettyLogger.connectionStatus(connections);
+      logger.info('Database connections established');
     } catch (error) {
-      logger.error('❌ Database initialization failed:', error);
+      PrettyLogger.error('Database initialization failed', error.message);
       await SystemLogger.logDatabaseConnection('failed', {
         error: error.message
       });
@@ -112,7 +127,8 @@ class App {
           'Accept-Language',
           'X-CSRF-Token',
           'X-Requested-With',
-          'X-Browser-Fingerprint'
+          'X-Browser-Fingerprint',
+          'X-Guest-ID'
         ],
         exposedHeaders: ['X-CSRF-Token'],
         preflightContinue: false,
@@ -188,7 +204,7 @@ class App {
     this.app.get('/health', (req, res) => {
       res.json({
         success: true,
-        message: 'سرور هیکاوب در حال اجرا است',
+        message: 'Hikaweb server is running',
         timestamp: new Date(),
         version: '1.0.0',
         uptime: process.uptime(),
@@ -248,6 +264,14 @@ class App {
 
     // Short Links
     apiRouter.use('/shortlinks', shortLinkRoutes);
+
+    // E-commerce
+    apiRouter.use('/cart', cartRoutes);
+    apiRouter.use('/products', productRoutes);
+    apiRouter.use('/orders', orderRoutes);
+    apiRouter.use('/payments', paymentRoutes);
+    apiRouter.use('/shipping', shippingRoutes);
+    apiRouter.use('/coupons', couponRoutes);
 
     // Mount API routes
     this.app.use('/api/v1', apiRouter);

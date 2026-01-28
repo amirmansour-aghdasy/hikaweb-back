@@ -12,6 +12,7 @@ dist/
 build/
 uploads/*
 !uploads/.gitkeep
+temp/
 .vscode/
 .idea/
 *.swp

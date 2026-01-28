@@ -7,6 +7,8 @@ import { config } from '../../config/environment.js';
 import { redisClient } from '../../config/redis.js';
 import { smsService } from '../../utils/sms.js';
 import { logger } from '../../utils/logger.js';
+import { AppError } from '../../utils/appError.js';
+import { HTTP_STATUS } from '../../utils/httpStatus.js';
 
 export class AuthService {
   static async register(userData) {
@@ -136,6 +138,75 @@ export class AuthService {
       };
     } catch (error) {
       logger.error('OTP verification error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Request OTP for changing phone number (authenticated users only)
+   * Checks if the new phone number is unique before sending OTP
+   */
+  static async requestOTPForPhoneChange(userId, newPhoneNumber) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw AppError.notFound('کاربر یافت نشد');
+      }
+
+      // Normalize phone number for comparison (handle different formats)
+      const normalizePhoneForQuery = (phone) => {
+        if (!phone) return null;
+        // Remove all non-digit characters
+        let normalized = phone.replace(/\D/g, '');
+        // Remove leading 98 or 0
+        if (normalized.startsWith('98')) {
+          normalized = normalized.substring(2);
+        } else if (normalized.startsWith('0')) {
+          normalized = normalized.substring(1);
+        }
+        return normalized;
+      };
+
+      const normalizedNewPhone = normalizePhoneForQuery(newPhoneNumber);
+      
+      if (!normalizedNewPhone) {
+        throw AppError.badRequest('شماره موبایل نامعتبر است');
+      }
+
+      // Check if new phone number is the same as current phone number
+      const normalizedCurrentPhone = normalizePhoneForQuery(user.phoneNumber);
+      if (normalizedNewPhone === normalizedCurrentPhone) {
+        throw AppError.badRequest('شماره موبایل جدید باید با شماره فعلی متفاوت باشد');
+      }
+
+      // Check all possible formats of the phone number
+      const phoneFormats = [
+        newPhoneNumber,
+        `0${normalizedNewPhone}`,
+        `+98${normalizedNewPhone}`,
+        `98${normalizedNewPhone}`,
+        normalizedNewPhone
+      ];
+
+      // Check if another user already has this phone number in any format
+      const existingUser = await User.findOne({
+        _id: { $ne: userId },
+        phoneNumber: { $in: phoneFormats },
+        deletedAt: null
+      });
+
+      if (existingUser) {
+        throw AppError.conflict('شماره موبایل وارد شده قبلاً توسط کاربر دیگری استفاده شده است');
+      }
+
+      // Phone number is unique, proceed with OTP request
+      return await this.requestOTP(newPhoneNumber);
+    } catch (error) {
+      // If error is already an AppError, re-throw it
+      if (error instanceof AppError) {
+        throw error;
+      }
+      logger.error('Request OTP for phone change error:', error);
       throw error;
     }
   }
@@ -405,12 +476,73 @@ export class AuthService {
         throw new Error('کاربر یافت نشد');
       }
 
+      // Normalize phone number for comparison (handle different formats)
+      const normalizePhoneForQuery = (phone) => {
+        if (!phone) return null;
+        // Remove all non-digit characters
+        let normalized = phone.replace(/\D/g, '');
+        // Remove leading 98 or 0
+        if (normalized.startsWith('98')) {
+          normalized = normalized.substring(2);
+        } else if (normalized.startsWith('0')) {
+          normalized = normalized.substring(1);
+        }
+        return normalized;
+      };
+
+      // Check phoneNumber uniqueness if changed
+      if (profileData.phoneNumber !== undefined) {
+        const newPhoneNumber = profileData.phoneNumber ? profileData.phoneNumber.trim() : null;
+        
+        // Only check if phone number is actually changing
+        if (newPhoneNumber !== user.phoneNumber) {
+          const normalizedNewPhone = normalizePhoneForQuery(newPhoneNumber);
+          
+          if (normalizedNewPhone) {
+            // Check all possible formats of the phone number
+            const phoneFormats = [
+              newPhoneNumber,
+              `0${normalizedNewPhone}`,
+              `+98${normalizedNewPhone}`,
+              `98${normalizedNewPhone}`,
+              normalizedNewPhone
+            ];
+
+            // Check if another user already has this phone number in any format
+            const existingUser = await User.findOne({
+              _id: { $ne: userId },
+              phoneNumber: { $in: phoneFormats },
+              deletedAt: null
+            });
+
+            if (existingUser) {
+              throw AppError.conflict('شماره موبایل وارد شده قبلاً توسط کاربر دیگری استفاده شده است');
+            }
+          }
+        }
+      }
+
       // Update allowed fields
       if (profileData.name !== undefined) {
         user.name = profileData.name;
       }
+      // Phone number should only be updated through OTP verification endpoint
+      // Do not allow direct phone number updates through updateProfile
       if (profileData.phoneNumber !== undefined) {
-        user.phoneNumber = profileData.phoneNumber || null;
+        // Only allow setting phoneNumber to null or empty (removing it)
+        // Actual phone number changes must go through OTP verification
+        if (!profileData.phoneNumber || profileData.phoneNumber.trim() === '') {
+          user.phoneNumber = null;
+        } else {
+          // If trying to set a phone number directly, check if it's the same as current
+          const normalizedCurrent = normalizePhoneForQuery(user.phoneNumber);
+          const normalizedNew = normalizePhoneForQuery(profileData.phoneNumber.trim());
+          
+          if (normalizedCurrent !== normalizedNew) {
+            throw AppError.badRequest('برای تغییر شماره موبایل باید از طریق تأیید OTP اقدام کنید');
+          }
+          // If it's the same, allow it (no change)
+        }
       }
       if (profileData.avatar !== undefined) {
         user.avatar = profileData.avatar || null;
@@ -477,14 +609,41 @@ export class AuthService {
       // OTP verified successfully - clean up
       await redis.del(`otp:${newPhoneNumber}`);
 
-      // Check if new phone number is already taken by another user
-      const existingUser = await User.findOne({ 
-        phoneNumber: newPhoneNumber,
-        _id: { $ne: userId }
-      });
+      // Normalize phone number for comparison (handle different formats)
+      const normalizePhoneForQuery = (phone) => {
+        if (!phone) return null;
+        // Remove all non-digit characters
+        let normalized = phone.replace(/\D/g, '');
+        // Remove leading 98 or 0
+        if (normalized.startsWith('98')) {
+          normalized = normalized.substring(2);
+        } else if (normalized.startsWith('0')) {
+          normalized = normalized.substring(1);
+        }
+        return normalized;
+      };
 
-      if (existingUser) {
-        throw new Error('این شماره موبایل قبلاً توسط کاربر دیگری استفاده شده است');
+      const normalizedNewPhone = normalizePhoneForQuery(newPhoneNumber);
+      
+      if (normalizedNewPhone) {
+        // Check all possible formats of the phone number
+        const phoneFormats = [
+          newPhoneNumber,
+          `0${normalizedNewPhone}`,
+          `+98${normalizedNewPhone}`,
+          `98${normalizedNewPhone}`,
+          normalizedNewPhone
+        ];
+
+        // Check if new phone number is already taken by another user in any format
+        const existingUser = await User.findOne({ 
+          phoneNumber: { $in: phoneFormats },
+          _id: { $ne: userId }
+        });
+
+        if (existingUser) {
+          throw new Error('این شماره موبایل قبلاً توسط کاربر دیگری استفاده شده است');
+        }
       }
 
       // Update phone number and mark as verified

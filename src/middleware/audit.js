@@ -63,7 +63,9 @@ export const auditLog = (action, resource) => {
             'EXPORT', 'IMPORT', 'SETTINGS_UPDATE', 'SYSTEM_CONFIG_CHANGE',
             'WEBAUTHN_REGISTER_OPTIONS', 'WEBAUTHN_REGISTER', 'WEBAUTHN_AUTHENTICATE',
             'WEBAUTHN_DELETE_CREDENTIAL', 'WEBAUTHN_AUTHENTICATE_OPTIONS',
-            'ADD_TICKET_MESSAGE', 'ASSIGN_TICKET', 'CLOSE_TICKET'];
+            'ADD_TICKET_MESSAGE', 'ASSIGN_TICKET', 'CLOSE_TICKET',
+            'INITIALIZE_PAYMENT', 'VERIFY_PAYMENT', 'CANCEL_PAYMENT', 'REFUND_PAYMENT',
+            'CANCEL_ORDER'];
           if (specificActions.includes(logAction)) {
             // Keep as-is
           }

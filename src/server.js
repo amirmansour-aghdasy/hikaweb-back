@@ -4,6 +4,7 @@
 import 'dotenv/config';
 import { config } from './config/environment.js';
 import { logger } from './utils/logger.js';
+import { PrettyLogger } from './utils/prettyLogger.js';
 import { SystemLogger } from './utils/systemLogger.js';
 import { schedulerService } from './services/scheduler.js';
 import App from './app.js';
@@ -14,9 +15,14 @@ async function startServer() {
     const app = appInstance.getExpressApp();
 
     const server = app.listen(config.PORT, async () => {
-      logger.info(`🚀 هیکاوب بکند سرور روی پورت ${config.PORT} راه‌اندازی شد`);
-      logger.info(`📚 مستندات API: http://localhost:${config.PORT}/api-docs`);
-      logger.info(`🌍 محیط: ${config.NODE_ENV}`);
+      // Display beautiful startup banner
+      PrettyLogger.startupBanner(
+        config.PORT,
+        config.NODE_ENV,
+        `http://localhost:${config.PORT}/api-docs`
+      );
+
+      logger.info(`Server started successfully on port ${config.PORT}`);
 
       // Log system startup
       await SystemLogger.logStartup({
@@ -28,6 +34,13 @@ async function startServer() {
       // Start scheduler service
       if (config.NODE_ENV !== 'test') {
         schedulerService.start();
+        // Display scheduler jobs after a short delay
+        setTimeout(() => {
+          const status = schedulerService.getStatus();
+          if (status.jobs.length > 0) {
+            PrettyLogger.schedulerJobs(status.jobs);
+          }
+        }, 500);
       }
 
       // Send startup notification to Bale
@@ -36,7 +49,7 @@ async function startServer() {
           if (baleService && typeof baleService.sendSystemAlert === 'function') {
             baleService
               .sendSystemAlert(
-                `🚀 هیکاوب بکند با موفقیت روی پورت ${config.PORT} راه‌اندازی شد`,
+                `🚀 Hikaweb backend successfully started on port ${config.PORT}`,
                 'success'
               )
               .catch(err => logger.warn('Bale notification failed:', err));
@@ -50,7 +63,8 @@ async function startServer() {
     process.on('SIGINT', gracefulShutdown);
 
     async function gracefulShutdown(signal) {
-      logger.info(`سیگنال ${signal} دریافت شد. شروع خاموشی...`);
+      PrettyLogger.shutdown(signal);
+      logger.info(`Signal ${signal} received. Starting graceful shutdown...`);
 
       // Stop scheduler
       schedulerService.stop();
@@ -62,24 +76,24 @@ async function startServer() {
       });
 
       server.close(async () => {
-        logger.info('سرور HTTP بسته شد');
+        logger.info('HTTP server closed');
 
         try {
           await appInstance.gracefulShutdown();
         } catch (error) {
-          logger.error('خطا در خاموشی:', error);
-          await SystemLogger.logCriticalError('خطا در خاموشی سیستم', error);
+          logger.error('Error during shutdown:', error);
+          await SystemLogger.logCriticalError('System shutdown error', error);
           process.exit(1);
         }
       });
 
       setTimeout(() => {
-        logger.error('اتصالات به موقع بسته نشدند، خاموشی اجباری');
+        logger.error('Connections did not close in time, forcing shutdown');
         process.exit(1);
       }, 30000);
     }
   } catch (error) {
-    logger.error('شروع سرور ناموفق بود:', error);
+    logger.error('Server startup failed:', error);
     process.exit(1);
   }
 }

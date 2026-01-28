@@ -13,6 +13,7 @@ import {
   refreshTokenSchema,
   changePasswordSchema,
   updateProfileSchema,
+  requestPhoneChangeOTPSchema,
   verifyPhoneNumberOTPSchema,
   googleAuthSchema,
   dashboardOTPRequestSchema,
@@ -157,6 +158,15 @@ router.put('/profile',
   validate(updateProfileSchema),
   auditLog('UPDATE_PROFILE', 'users'),
   AuthController.updateProfile
+);
+
+// Request OTP for changing phone number (authenticated users only)
+router.post('/profile/request-phone-change-otp',
+  authenticate,
+  otpLimiter,
+  validate(requestPhoneChangeOTPSchema),
+  auditLog('REQUEST_PHONE_CHANGE_OTP', 'users'),
+  AuthController.requestPhoneChangeOTP
 );
 
 // Verify phone number OTP and update phone number

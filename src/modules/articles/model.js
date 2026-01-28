@@ -19,6 +19,14 @@ const articleSchema = new mongoose.Schema({
     en: { type: String, required: true }
   },
   featuredImage: String,
+  // Intro video (optional) - displayed at top of sidebar in article detail page
+  introVideo: {
+    url: String, // Video file URL
+    thumbnailUrl: String, // Thumbnail image URL
+    duration: Number, // in seconds
+    fileSize: Number, // in bytes
+    format: { type: String, enum: ['mp4', 'webm', 'm3u8'], default: 'mp4' }
+  },
   gallery: [{
     url: String,
     alt: { fa: String, en: String },
@@ -40,6 +48,12 @@ const articleSchema = new mongoose.Schema({
   publishedAt: Date,
   isPublished: { type: Boolean, default: false },
   isFeatured: { type: Boolean, default: false },
+  isPremium: { type: Boolean, default: false }, // Article requires purchase to read full content
+  relatedProduct: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    default: null
+  }, // Link to product if article is sold as a digital product
   readTime: { type: Number, default: 0 },
   views: { type: Number, default: 0 },
   likes: { type: Number, default: 0 },
@@ -63,6 +77,35 @@ const articleSchema = new mongoose.Schema({
     fileSize: Number,
     fileType: String,
     isActive: { type: Boolean, default: false }
+  },
+  // Digital product files for premium articles
+  digitalContent: {
+    // Main PDF file of the article
+    mainPdf: {
+      url: String,
+      fileName: String,
+      fileSize: Number, // in bytes
+      mimeType: { type: String, default: 'application/pdf' }
+    },
+    // Videos embedded in article content (1-4 videos)
+    videos: [{
+      title: { fa: String, en: String },
+      url: String, // Video file URL
+      thumbnailUrl: String,
+      duration: Number, // in seconds
+      fileSize: Number, // in bytes
+      format: { type: String, enum: ['mp4', 'webm', 'm3u8'], default: 'mp4' },
+      order: { type: Number, default: 0 } // Order in article content
+    }],
+    // PDF attachments (supplementary files)
+    attachments: [{
+      title: { fa: String, en: String },
+      url: String, // PDF file URL
+      fileName: String,
+      fileSize: Number, // in bytes
+      mimeType: { type: String, default: 'application/pdf' },
+      order: { type: Number, default: 0 }
+    }]
   },
   ...baseSchemaFields
 }, {

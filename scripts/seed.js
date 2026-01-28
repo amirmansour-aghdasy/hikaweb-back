@@ -237,6 +237,15 @@ async function seedDatabase() {
     await Settings.getInstance();
     logger.info('✅ تنظیمات پیش‌فرض ایجاد شد');
 
+    // Initialize default shipping methods
+    try {
+      const { ShippingService } = await import('../src/modules/shipping/service.js');
+      await ShippingService.initializeDefaultMethods();
+      logger.info('✅ روش‌های ارسال پیش‌فرض ایجاد شدند');
+    } catch (shippingError) {
+      logger.warn('⚠️ خطا در ایجاد روش‌های ارسال پیش‌فرض:', shippingError.message);
+    }
+
     logger.info('\n🎉 Seed کردن دیتابیس با موفقیت انجام شد!');
     logger.info('\n📋 اطلاعات ورود:');
     logger.info('ایمیل: admin@hikaweb.ir');

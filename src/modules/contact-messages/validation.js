@@ -1,5 +1,8 @@
 import Joi from 'joi';
 
+// Improved phone number pattern matching Iranian mobile prefixes
+const phonePattern = /^(09)(10|11|12|13|14|15|16|17|18|19|90|91|92|93|94|30|33|35|36|37|38|39|00|01|02|03|04|05|41|42|20|21|22|32|31|34)\d{7}$/;
+
 export const createContactMessageSchema = Joi.object({
   fullName: Joi.string().required().trim().min(2).max(100).messages({
     'any.required': 'نام و نام خانوادگی الزامی است',
@@ -7,24 +10,34 @@ export const createContactMessageSchema = Joi.object({
     'string.max': 'نام نمی‌تواند بیش از ۱۰۰ کاراکتر باشد'
   }),
 
-  email: Joi.string().required().email().lowercase().trim().messages({
-    'any.required': 'ایمیل الزامی است',
-    'string.email': 'فرمت ایمیل صحیح نیست'
-  }),
+  email: Joi.string()
+    .optional()
+    .allow('', null)
+    .email()
+    .lowercase()
+    .trim()
+    .messages({
+      'string.email': 'فرمت ایمیل صحیح نیست'
+    }),
 
   phoneNumber: Joi.string()
     .required()
-    .pattern(/^(\+98|0)?9\d{9}$/)
+    .pattern(phonePattern)
     .messages({
       'any.required': 'شماره موبایل الزامی است',
-      'string.pattern.base': 'شماره موبایل صحیح نیست'
+      'string.pattern.base': 'شماره موبایل صحیح نیست. لطفاً شماره معتبر وارد کنید (مثال: 09123456789)'
     }),
 
-  message: Joi.string().required().trim().min(10).max(2000).messages({
-    'any.required': 'پیام الزامی است',
-    'string.min': 'پیام باید حداقل ۱۰ کاراکتر باشد',
-    'string.max': 'پیام نمی‌تواند بیش از ۲۰۰۰ کاراکتر باشد'
-  }),
+  message: Joi.string()
+    .optional()
+    .allow('', null)
+    .trim()
+    .min(10)
+    .max(2000)
+    .messages({
+      'string.min': 'پیام باید حداقل ۱۰ کاراکتر باشد',
+      'string.max': 'پیام نمی‌تواند بیش از ۲۰۰۰ کاراکتر باشد'
+    }),
 
   leadSource: Joi.string()
     .valid('website', 'referral', 'social_media', 'google_ads', 'direct', 'other')

@@ -1,5 +1,6 @@
 import { Consultation } from './model.js';
 import { Service } from '../services/model.js';
+import { Product } from '../products/model.js';
 import { User } from '../auth/model.js';
 import { Role } from '../users/roleModel.js';
 import { NotificationService } from '../notifications/service.js';
@@ -10,16 +11,8 @@ import { logger } from '../../utils/logger.js';
 export class ConsultationService {
   static async createSimpleConsultation(simpleData, userId = null) {
     try {
-      // Find service by ID (simple and reliable)
-      const service = await Service.findOne({
-        _id: simpleData.serviceId,
-        deletedAt: null
-      });
-
-      if (!service) {
-        throw new Error('خدمت انتخابی یافت نشد');
-      }
-
+      const consultationType = simpleData.type || (simpleData.productId ? 'product' : 'service');
+      
       // Convert simple form data to full consultation data
       // Support both fullName (new simplified form) and firstName/lastName (old form)
       let fullName;
@@ -31,19 +24,48 @@ export class ConsultationService {
         throw new Error('نام و نام خانوادگی الزامی است');
       }
 
-      const consultationData = {
+      let consultationData = {
         fullName: fullName,
         phoneNumber: simpleData.phone,
-        email: simpleData.email || `${simpleData.phone}@temp.hikaweb.ir`, // Use temp email if not provided
-        services: [service._id],
-        projectDescription: `درخواست مشاوره برای خدمت: ${service.name?.fa || 'خدمت انتخابی'}`,
-        budget: 'custom', // Default value - 'flexible' is not a valid enum value
-        timeline: 'flexible', // Default value - this is valid
+        email: simpleData.email || `${simpleData.phone}@temp.hikaweb.ir`,
+        budget: 'custom',
+        timeline: 'flexible',
         preferredContactMethod: 'phone',
         preferredContactTime: 'anytime',
         leadSource: 'website',
-        user: userId // Link to user if authenticated
+        type: consultationType,
+        user: userId
       };
+
+      if (consultationType === 'product' && simpleData.productId) {
+        // Product consultation
+        const product = await Product.findOne({
+          _id: simpleData.productId,
+          deletedAt: null
+        });
+
+        if (!product) {
+          throw new Error('محصول انتخابی یافت نشد');
+        }
+
+        consultationData.product = product._id;
+        consultationData.projectDescription = `درخواست مشاوره قبل از خرید محصول: ${product.name?.fa || product.name || 'محصول انتخابی'}`;
+      } else if (simpleData.serviceId) {
+        // Service consultation
+        const service = await Service.findOne({
+          _id: simpleData.serviceId,
+          deletedAt: null
+        });
+
+        if (!service) {
+          throw new Error('خدمت انتخابی یافت نشد');
+        }
+
+        consultationData.services = [service._id];
+        consultationData.projectDescription = `درخواست مشاوره برای خدمت: ${service.name?.fa || 'خدمت انتخابی'}`;
+      } else {
+        throw new Error('باید یا serviceId یا productId را ارسال کنید');
+      }
 
       return await this.createConsultation(consultationData);
     } catch (error) {
@@ -63,6 +85,18 @@ export class ConsultationService {
 
         if (servicesCount !== consultationData.services.length) {
           throw new Error('برخی از خدمات انتخابی نامعتبر هستند');
+        }
+      }
+
+      // Validate product exists
+      if (consultationData.product) {
+        const product = await Product.findOne({
+          _id: consultationData.product,
+          deletedAt: null
+        });
+
+        if (!product) {
+          throw new Error('محصول انتخابی نامعتبر است');
         }
       }
 

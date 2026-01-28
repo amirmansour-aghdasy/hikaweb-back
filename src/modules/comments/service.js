@@ -3,6 +3,7 @@ import { Service } from '../services/model.js';
 import { Article } from '../articles/model.js';
 import { Portfolio } from '../portfolio/model.js';
 import { Video } from '../videos/model.js';
+import { Product } from '../products/model.js';
 import { AppError } from '../../utils/appError.js';
 import { logger } from '../../utils/logger.js';
 import { cacheService } from '../../services/cache.js';
@@ -14,12 +15,16 @@ export class CommentService {
       // Verify reference exists
       await this.verifyReference(data.referenceType, data.referenceId);
 
+      // Normalize referenceType to match enum
+      const normalizedReferenceType = data.referenceType.charAt(0).toUpperCase() + 
+        data.referenceType.slice(1).toLowerCase();
+
       // Check for duplicate (same user, same reference, within 24 hours)
       if (userId) {
         const existingComment = await Comment.findOne({
           author: userId,
-          referenceType: data.referenceType,
-          referenceId: data.referenceId,
+          resourceType: normalizedReferenceType,
+          resourceId: data.referenceId,
           createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
         });
 
@@ -27,29 +32,32 @@ export class CommentService {
           throw new AppError('شما قبلاً برای این آیتم نظر ثبت کرده‌اید', 400);
         }
       }
-
+      
       const comment = new Comment({
-        ...data,
+        content: data.content,
+        rating: data.rating,
+        resourceType: normalizedReferenceType,
+        resourceId: data.referenceId,
         author: userId,
-        status: 'pending'
+        moderationStatus: 'pending'
       });
 
       await comment.save();
 
       // Update reference rating average
-      await this.updateReferenceRating(data.referenceType, data.referenceId);
+      await this.updateReferenceRating(normalizedReferenceType, data.referenceId);
 
       // Clear cache
-      await cacheService.deletePattern(`comments:${data.referenceType}:${data.referenceId}:*`);
+      await cacheService.deletePattern(`comments:${normalizedReferenceType}:${data.referenceId}:*`);
 
       // Send notification to moderators
       await notificationService.notifyModerators('comment_created', {
         commentId: comment._id,
-        referenceType: data.referenceType,
+        referenceType: normalizedReferenceType,
         content: data.content.substring(0, 100) + '...'
       });
 
-      logger.info('Comment created:', { id: comment._id, referenceType: data.referenceType });
+      logger.info('Comment created:', { id: comment._id, resourceType: normalizedReferenceType });
 
       return comment;
     } catch (error) {
@@ -59,8 +67,11 @@ export class CommentService {
   }
 
   static async verifyReference(type, id) {
+    // Normalize type to match enum (capitalize first letter)
+    const normalizedType = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+    
     let Model;
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'service':
         Model = Service;
         break;
@@ -72,6 +83,9 @@ export class CommentService {
         break;
       case 'video':
         Model = Video;
+        break;
+      case 'product':
+        Model = Product;
         break;
       default:
         throw new AppError('نوع مرجع نامعتبر است', 400);
@@ -106,12 +120,15 @@ export class CommentService {
       const filter = { deletedAt: null };
 
       if (status && status !== 'all') {
-        filter.status = status;
+        filter.moderationStatus = status;
       }
 
       if (referenceType && referenceId) {
-        filter.referenceType = referenceType;
-        filter.referenceId = referenceId;
+        // Normalize referenceType to match enum
+        const normalizedReferenceType = referenceType.charAt(0).toUpperCase() + 
+          referenceType.slice(1).toLowerCase();
+        filter.resourceType = normalizedReferenceType;
+        filter.resourceId = referenceId;
       }
 
       if (rating) {
@@ -161,14 +178,18 @@ export class CommentService {
     try {
       const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = query;
 
-      const cacheKey = `comments:${referenceType}:${referenceId}:${JSON.stringify(query)}`;
+      // Normalize referenceType to match enum (Service, Product, Article, etc.)
+      const normalizedReferenceType = referenceType.charAt(0).toUpperCase() + 
+        referenceType.slice(1).toLowerCase();
+
+      const cacheKey = `comments:${normalizedReferenceType}:${referenceId}:${JSON.stringify(query)}`;
       const cached = await cacheService.get(cacheKey);
       if (cached) return cached;
 
       const filter = {
-        referenceType,
-        referenceId,
-        status: 'approved',
+        resourceType: normalizedReferenceType,
+        resourceId: referenceId,
+        moderationStatus: 'approved',
         deletedAt: null
       };
 
@@ -185,7 +206,7 @@ export class CommentService {
           .limit(parseInt(limit))
           .select('-__v'),
         Comment.countDocuments(filter),
-        this.getCommentStats(referenceType, referenceId)
+        this.getCommentStats(normalizedReferenceType, referenceId)
       ]);
 
       const result = {
@@ -211,12 +232,16 @@ export class CommentService {
 
   static async getCommentStats(referenceType, referenceId) {
     try {
+      // Normalize referenceType to match enum
+      const normalizedReferenceType = referenceType.charAt(0).toUpperCase() + 
+        referenceType.slice(1).toLowerCase();
+      
       const stats = await Comment.aggregate([
         {
           $match: {
-            referenceType,
-            referenceId,
-            status: 'approved',
+            resourceType: normalizedReferenceType,
+            resourceId: referenceId,
+            moderationStatus: 'approved',
             deletedAt: null
           }
         },
@@ -277,12 +302,12 @@ export class CommentService {
 
       // Update reference rating if rating changed
       if (data.rating && data.rating !== oldRating) {
-        await this.updateReferenceRating(comment.referenceType, comment.referenceId);
+        await this.updateReferenceRating(comment.resourceType, comment.resourceId);
       }
 
       // Clear cache
       await cacheService.deletePattern(
-        `comments:${comment.referenceType}:${comment.referenceId}:*`
+        `comments:${comment.resourceType}:${comment.resourceId}:*`
       );
 
       logger.info('Comment updated:', { id: comment._id });
@@ -297,7 +322,7 @@ export class CommentService {
   static async getPendingComments(limit = 10) {
     try {
       const comments = await Comment.find({
-        status: 'pending',
+        moderationStatus: 'pending',
         deletedAt: null
       })
         .populate('author', 'firstName lastName email')
@@ -318,8 +343,8 @@ export class CommentService {
         throw new AppError('نظر یافت نشد', 404);
       }
 
-      comment.status = data.status;
-      comment.moderationNote = data.moderationNote;
+      comment.moderationStatus = data.status;
+      comment.moderationReason = data.moderationNote;
       comment.moderatedBy = userId;
       comment.moderatedAt = new Date();
       comment.updatedBy = userId;
@@ -327,11 +352,11 @@ export class CommentService {
       await comment.save();
 
       // Update reference rating
-      await this.updateReferenceRating(comment.referenceType, comment.referenceId);
+      await this.updateReferenceRating(comment.resourceType, comment.resourceId);
 
       // Clear cache
       await cacheService.deletePattern(
-        `comments:${comment.referenceType}:${comment.referenceId}:*`
+        `comments:${comment.resourceType}:${comment.resourceId}:*`
       );
 
       // Notify comment author
@@ -348,6 +373,104 @@ export class CommentService {
     } catch (error) {
       logger.error('Error moderating comment:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update reference rating based on approved comments
+   */
+  static async updateReferenceRating(referenceType, referenceId) {
+    try {
+      // Normalize referenceType
+      const normalizedType = referenceType.charAt(0).toUpperCase() + 
+        referenceType.slice(1).toLowerCase();
+
+      // Get stats from approved comments
+      const stats = await this.getCommentStats(normalizedType, referenceId);
+
+      // Update reference based on type
+      switch (normalizedType) {
+        case 'Service':
+          const service = await Service.findById(referenceId);
+          if (service) {
+            service.ratings = {
+              average: stats.averageRating || 0,
+              count: stats.totalComments || 0,
+              breakdown: stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+            };
+            await service.save();
+          }
+          break;
+
+        case 'Article':
+          const article = await Article.findById(referenceId);
+          if (article) {
+            article.ratings = {
+              average: stats.averageRating || 0,
+              count: stats.totalComments || 0,
+              breakdown: stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+            };
+            await article.save();
+          }
+          break;
+
+        case 'Portfolio':
+          const portfolio = await Portfolio.findById(referenceId);
+          if (portfolio) {
+            portfolio.ratings = {
+              average: stats.averageRating || 0,
+              count: stats.totalComments || 0,
+              breakdown: stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+            };
+            await portfolio.save();
+          }
+          break;
+
+        case 'Video':
+          const video = await Video.findById(referenceId);
+          if (video) {
+            video.ratings = {
+              average: stats.averageRating || 0,
+              count: stats.totalComments || 0,
+              breakdown: stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+            };
+            await video.save();
+          }
+          break;
+
+        case 'Product':
+          const product = await Product.findById(referenceId);
+          if (product) {
+            // Calculate total from breakdown
+            const breakdown = stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            const total = (breakdown[1] || 0) * 1 + 
+                         (breakdown[2] || 0) * 2 + 
+                         (breakdown[3] || 0) * 3 + 
+                         (breakdown[4] || 0) * 4 + 
+                         (breakdown[5] || 0) * 5;
+            
+            product.ratings = {
+              total: total,
+              count: stats.totalComments || 0,
+              average: stats.averageRating || 0,
+              breakdown: {
+                5: breakdown[5] || 0,
+                4: breakdown[4] || 0,
+                3: breakdown[3] || 0,
+                2: breakdown[2] || 0,
+                1: breakdown[1] || 0
+              }
+            };
+            await product.save();
+          }
+          break;
+
+        default:
+          logger.warn(`Unknown reference type for rating update: ${normalizedType}`);
+      }
+    } catch (error) {
+      logger.error('Error updating reference rating:', error);
+      // Don't throw - rating update failure shouldn't break comment creation
     }
   }
 }

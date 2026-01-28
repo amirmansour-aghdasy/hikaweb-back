@@ -17,6 +17,11 @@ export const authorize = permissions => {
       return next();
     }
 
+    // Admin with admin.all permission bypass
+    if (userPermissions.includes('admin.all')) {
+      return next();
+    }
+
     const hasPermission = requiredPermissions.some(permission =>
       userPermissions.includes(permission)
     );
