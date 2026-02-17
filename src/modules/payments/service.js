@@ -4,6 +4,9 @@ import { OrderService } from '../orders/service.js';
 import { GatewayFactory } from './gateways/index.js';
 import { logger } from '../../utils/logger.js';
 
+/** Minimum amount (Toman) accepted by Zarinpal gateway */
+const ZARINPAL_MIN_AMOUNT = 1000;
+
 /**
  * PaymentService - Service layer for payment operations
  * 
@@ -46,9 +49,15 @@ export class PaymentService {
 
       // Check if payment already exists
       let payment = await Payment.findByOrder(orderId);
-      
+
       if (payment && payment.status === 'completed') {
         throw new Error('این سفارش قبلاً پرداخت شده است');
+      }
+
+      // Validate minimum amount for gateway (Zarinpal requires at least 1000 Toman)
+      const gatewayNameToUse = gatewayName || 'zarinpal';
+      if (gatewayNameToUse.toLowerCase() === 'zarinpal' && order.totals.total < ZARINPAL_MIN_AMOUNT) {
+        throw new Error(`حداقل مبلغ پرداخت برای درگاه زرین‌پال ${ZARINPAL_MIN_AMOUNT.toLocaleString('fa-IR')} تومان است.`);
       }
 
       // Create new payment if doesn't exist or previous one failed

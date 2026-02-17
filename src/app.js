@@ -58,6 +58,7 @@ import orderRoutes from './modules/orders/routes.js';
 import paymentRoutes from './modules/payments/routes.js';
 import shippingRoutes from './modules/shipping/routes.js';
 import couponRoutes from './modules/coupons/routes.js';
+import emailAccountsRoutes from './modules/email-accounts/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -272,6 +273,7 @@ class App {
     apiRouter.use('/payments', paymentRoutes);
     apiRouter.use('/shipping', shippingRoutes);
     apiRouter.use('/coupons', couponRoutes);
+    apiRouter.use('/email-accounts', emailAccountsRoutes);
 
     // Mount API routes
     this.app.use('/api/v1', apiRouter);

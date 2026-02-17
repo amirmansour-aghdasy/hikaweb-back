@@ -2,9 +2,15 @@ import axios from 'axios';
 import { BaseGateway } from './baseGateway.js';
 import { logger } from '../../../utils/logger.js';
 
+/** User-friendly Persian messages for known Zarinpal error codes */
+const ZARINPAL_ERROR_MESSAGES = {
+  [-9]: 'حداقل مبلغ پرداخت ۱٬۰۰۰ تومان است.',
+  [-12]: 'تعداد درخواست‌ها زیاد است. لطفاً چند دقیقه دیگر دوباره تلاش کنید.'
+};
+
 /**
  * Zarinpal Payment Gateway
- * 
+ *
  * Documentation: https://docs.zarinpal.com/
  */
 export class ZarinpalGateway extends BaseGateway {
@@ -201,19 +207,20 @@ export class ZarinpalGateway extends BaseGateway {
           gatewayResponse: response.data
         };
       } else {
-        const errorCode = response.data.errors?.code || response.data.data?.code;
-        const errorMessage = response.data.errors?.message || 'خطا در اتصال به درگاه پرداخت';
-        
+        const errorCode = response.data.errors?.code ?? response.data.data?.code;
+        const rawMessage = response.data.errors?.message || response.data.data?.message || '';
+        const errorMessage = ZARINPAL_ERROR_MESSAGES[errorCode] ?? (rawMessage || 'خطا در اتصال به درگاه پرداخت');
+
         logger.error('Zarinpal initialize error:', {
           code: errorCode,
-          message: errorMessage,
+          message: rawMessage,
           response: response.data
         });
 
         return {
           success: false,
           error: {
-            code: errorCode?.toString() || 'UNKNOWN',
+            code: (errorCode != null ? errorCode : 'UNKNOWN').toString(),
             message: errorMessage
           }
         };
@@ -230,20 +237,18 @@ export class ZarinpalGateway extends BaseGateway {
         })
       });
       
-      // Extract error message from Zarinpal response if available
-      let errorMessage = 'خطا در اتصال به درگاه پرداخت';
-      if (error.response?.data?.errors?.message) {
-        errorMessage = error.response.data.errors.message;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message && !error.message.includes('status code')) {
-        errorMessage = error.message;
-      }
-      
+      // Extract error message from Zarinpal response; prefer user-friendly Persian for known codes
+      const gatewayCode = error.response?.data?.errors?.code;
+      let errorMessage = ZARINPAL_ERROR_MESSAGES[gatewayCode]
+        ?? error.response?.data?.errors?.message
+        ?? error.response?.data?.message
+        ?? (error.message && !error.message.includes('status code') ? error.message : null)
+        ?? 'خطا در اتصال به درگاه پرداخت';
+
       return {
         success: false,
         error: {
-          code: error.response?.data?.errors?.code?.toString() || error.code || 'EXCEPTION',
+          code: (gatewayCode != null ? gatewayCode : error.code ?? 'EXCEPTION').toString(),
           message: errorMessage
         }
       };

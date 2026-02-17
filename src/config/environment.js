@@ -56,5 +56,16 @@ export const config = {
     
     // Monitoring
     LOG_LEVEL: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-    ENABLE_REQUEST_LOGGING: process.env.ENABLE_REQUEST_LOGGING !== 'false'
+    ENABLE_REQUEST_LOGGING: process.env.ENABLE_REQUEST_LOGGING !== 'false',
+
+    // Email (global fallback for OTP etc.; per-account config is in email-accounts module)
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
+    SMTP_SECURE: process.env.SMTP_SECURE === 'true',
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+    SMTP_FROM: process.env.SMTP_FROM || process.env.SMTP_USER,
+
+    // Encryption key for storing email account passwords (32 bytes hex or base64)
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || process.env.JWT_SECRET
   };
