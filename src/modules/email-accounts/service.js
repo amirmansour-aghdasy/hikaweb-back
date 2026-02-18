@@ -4,6 +4,7 @@ import { EmailAccount } from './model.js';
 import { SentEmail } from './sentEmailModel.js';
 import { encrypt, decrypt } from '../../utils/encrypt.js';
 import { logger } from '../../utils/logger.js';
+import { AppError } from '../../utils/appError.js';
 
 function findPartByType(node, type, subtype, path = '1') {
   if (node.type === type && node.subtype === subtype) return path;
@@ -193,21 +194,24 @@ export class EmailAccountsService {
       host,
       port,
       secure,
-      auth: { user: account.smtpUser, pass: password }
+      auth: { user: account.smtpUser, pass: password },
+      // Allow TLS when connecting from Docker to same-host mail server (e.g. mail.hikaweb.ir)
+      tls: { rejectUnauthorized: false }
     };
   }
 
   static async getInbox(accountId, query = {}) {
     const account = await EmailAccountsService.getByIdWithPassword(accountId);
-    if (!account) throw new Error('حساب ایمیل یافت نشد.');
+    if (!account) throw new AppError('حساب ایمیل یافت نشد.', 404);
     const imapHost = (account.imapHost && account.imapHost.trim()) || null;
     if (!imapHost) {
-      throw new Error('برای این حساب IMAP تنظیم نشده. در ویرایش حساب، فیلد «سرور IMAP» را پر کنید.');
+      throw new AppError('برای این حساب IMAP تنظیم نشده. در ویرایش حساب، فیلد «سرور IMAP» را پر کنید.', 400);
     }
     const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 20));
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const client = new ImapFlow(EmailAccountsService.getImapConfig(account));
+    let client;
     try {
+      client = new ImapFlow(EmailAccountsService.getImapConfig(account));
       await client.connect();
       const lock = await client.getMailboxLock('INBOX');
       try {
@@ -239,18 +243,36 @@ export class EmailAccountsService {
       } finally {
         lock.release();
       }
+    } catch (err) {
+      logger.error('IMAP getInbox error', { accountId, error: err.message, stack: err.stack });
+      const msg = err.message || String(err);
+      throw new AppError(
+        msg.includes('Invalid credentials') || msg.includes('Authentication failed')
+          ? 'نام کاربری یا رمز عبور IMAP اشتباه است. حساب را در «حساب‌های ایمیل» بررسی کنید.'
+          : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
+            ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
+            : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+        502
+      );
     } finally {
-      await client.logout();
+      if (client) {
+        try {
+          await client.logout();
+        } catch (_) {
+          // ignore logout errors (e.g. if connect failed)
+        }
+      }
     }
   }
 
   static async getInboxMessage(accountId, uid) {
     const account = await EmailAccountsService.getByIdWithPassword(accountId);
-    if (!account) throw new Error('حساب ایمیل یافت نشد.');
+    if (!account) throw new AppError('حساب ایمیل یافت نشد.', 404);
     const imapHost = (account.imapHost && account.imapHost.trim()) || null;
-    if (!imapHost) throw new Error('برای این حساب IMAP تنظیم نشده.');
-    const client = new ImapFlow(EmailAccountsService.getImapConfig(account));
+    if (!imapHost) throw new AppError('برای این حساب IMAP تنظیم نشده.', 400);
+    let client;
     try {
+      client = new ImapFlow(EmailAccountsService.getImapConfig(account));
       await client.connect();
       const lock = await client.getMailboxLock('INBOX');
       try {
@@ -290,8 +312,23 @@ export class EmailAccountsService {
       } finally {
         lock.release();
       }
+    } catch (err) {
+      logger.error('IMAP getInboxMessage error', { accountId, uid, error: err.message, stack: err.stack });
+      const msg = err.message || String(err);
+      throw new AppError(
+        msg.includes('Invalid credentials') || msg.includes('Authentication failed')
+          ? 'نام کاربری یا رمز عبور IMAP اشتباه است.'
+          : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
+            ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
+            : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+        502
+      );
     } finally {
-      await client.logout();
+      if (client) {
+        try {
+          await client.logout();
+        } catch (_) {}
+      }
     }
   }
 }
