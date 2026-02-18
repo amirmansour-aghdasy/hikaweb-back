@@ -246,12 +246,15 @@ export class EmailAccountsService {
     } catch (err) {
       logger.error('IMAP getInbox error', { accountId, error: err.message, stack: err.stack });
       const msg = err.message || String(err);
+      const sensitive = /password|secret|token|key|decrypt|ENCRYPTION/i.test(msg);
       throw new AppError(
         msg.includes('Invalid credentials') || msg.includes('Authentication failed')
           ? 'نام کاربری یا رمز عبور IMAP اشتباه است. حساب را در «حساب‌های ایمیل» بررسی کنید.'
           : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
             ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
-            : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+            : sensitive
+              ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب و رمز عبور را در «حساب‌های ایمیل» بررسی کنید.'
+              : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
         502
       );
     } finally {
@@ -315,12 +318,15 @@ export class EmailAccountsService {
     } catch (err) {
       logger.error('IMAP getInboxMessage error', { accountId, uid, error: err.message, stack: err.stack });
       const msg = err.message || String(err);
+      const sensitive = /password|secret|token|key|decrypt|ENCRYPTION/i.test(msg);
       throw new AppError(
         msg.includes('Invalid credentials') || msg.includes('Authentication failed')
           ? 'نام کاربری یا رمز عبور IMAP اشتباه است.'
           : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
             ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
-            : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+            : sensitive
+              ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب را بررسی کنید.'
+              : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
         502
       );
     } finally {
