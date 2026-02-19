@@ -150,11 +150,14 @@ export class EmailAccountsService {
   }
 
   static async send(accountId, payload, userId) {
+    if (!userId) {
+      throw new AppError('شناسه کاربر ارسال‌کننده معتبر نیست.', 400);
+    }
     const account = accountId
       ? await EmailAccountsService.getByIdWithPassword(accountId)
       : await EmailAccountsService.getDefaultAccount();
     if (!account) {
-      throw new Error('حساب ایمیل یافت نشد. لطفاً یک حساب پیش‌فرض تنظیم کنید.');
+      throw new AppError('حساب ایمیل یافت نشد. لطفاً یک حساب پیش‌فرض تنظیم کنید.', 404);
     }
     const transporter = EmailAccountsService.createTransporter(account);
     const to = Array.isArray(payload.to) ? payload.to : [payload.to];
@@ -169,19 +172,47 @@ export class EmailAccountsService {
       text: payload.text || (payload.html ? payload.html.replace(/<[^>]*>/g, '') : ''),
       html: payload.html || undefined
     };
-    await transporter.sendMail(mailOptions);
 
-    await SentEmail.create({
-      fromAccount: account._id,
-      fromAddress: account.address,
-      to,
-      cc: cc || [],
-      bcc: bcc || [],
-      subject: payload.subject,
-      bodyHtml: payload.html || '',
-      bodyText: payload.text || '',
-      sentBy: userId
-    });
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (err) {
+      logger.error('Email send (SMTP) failed', {
+        error: err.message,
+        code: err.code,
+        accountId: account._id?.toString(),
+        stack: err.stack
+      });
+      const msg = err.message || String(err);
+      if (err.code === 'EAUTH' || /auth|login|password|credentials/i.test(msg)) {
+        throw new AppError('احراز هویت SMTP ناموفق. رمز عبور حساب ایمیل را در «حساب‌های ایمیل» بررسی کنید.', 400);
+      }
+      if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND') {
+        throw new AppError(`اتصال به سرور ایمیل برقرار نشد: ${err.code || msg}`, 502);
+      }
+      throw new AppError(`ارسال ایمیل ناموفق: ${msg}`, 400);
+    }
+
+    try {
+      await SentEmail.create({
+        fromAccount: account._id,
+        fromAddress: account.address,
+        to,
+        cc: cc || [],
+        bcc: bcc || [],
+        subject: payload.subject,
+        bodyHtml: payload.html || '',
+        bodyText: payload.text || '',
+        sentBy: userId
+      });
+    } catch (err) {
+      logger.error('Email send (SentEmail.create) failed', {
+        error: err.message,
+        accountId: account._id?.toString(),
+        userId,
+        stack: err.stack
+      });
+      throw new AppError(`ذخیرهٔ سابقهٔ ارسال ناموفق: ${err.message || err}`, 400);
+    }
 
     logger.info(`Email sent from ${account.address} to ${to.join(', ')}`);
     return { success: true, from: account.address, to };
