@@ -1,10 +1,8 @@
+# برای دیپلوی با push، در تنظیمات ریپو Secrets را ست کنید: VPS_HOST و VPS_SSH_PRIVATE_KEY
+# اگر از روش دستی (server-pull-and-rebuild روی سرور) استفاده می‌کنید، trigger روی push حذف شده.
 name: Deploy Backend
 
 on:
-  push:
-    branches:
-      - master
-      - development
   workflow_dispatch:
     inputs:
       branch:
