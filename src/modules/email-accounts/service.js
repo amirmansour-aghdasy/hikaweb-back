@@ -6,12 +6,16 @@ import { encrypt, decrypt } from '../../utils/encrypt.js';
 import { logger } from '../../utils/logger.js';
 import { AppError } from '../../utils/appError.js';
 
-function findPartByType(node, type, subtype, path = '1') {
-  if (node.type === type && node.subtype === subtype) return path;
-  if (node.childNodes) {
-    for (let i = 0; i < node.childNodes.length; i++) {
-      const childPath = path === '1' ? `${i + 1}` : `${path}.${i + 1}`;
-      const found = findPartByType(node.childNodes[i], type, subtype, childPath);
+/**
+ * در ImapFlow مقدار type به صورت یک رشته است، مثلاً "text/plain" یا "text/html".
+ * بازگشت: شماره part برای download (مثلاً "1" یا "2.1"). برای پیام تک‌بخشی part ممکن است خالی باشد → "1".
+ */
+function findPartByContentType(node, contentType) {
+  const typeLower = (node.type || '').toLowerCase();
+  if (typeLower === contentType) return node.part != null && node.part !== '' ? node.part : '1';
+  if (node.childNodes && node.childNodes.length) {
+    for (const child of node.childNodes) {
+      const found = findPartByContentType(child, contentType);
       if (found) return found;
     }
   }
@@ -374,8 +378,8 @@ export class EmailAccountsService {
         let text = '';
         let html = '';
         if (message.bodyStructure) {
-          const textPart = findPartByType(message.bodyStructure, 'text', 'plain');
-          const htmlPart = findPartByType(message.bodyStructure, 'text', 'html');
+          const textPart = findPartByContentType(message.bodyStructure, 'text/plain');
+          const htmlPart = findPartByContentType(message.bodyStructure, 'text/html');
           if (textPart) {
             const { content } = await client.download(uid, textPart, { uid: true });
             const chunks = [];
