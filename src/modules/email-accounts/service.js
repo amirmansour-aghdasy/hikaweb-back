@@ -46,7 +46,9 @@ export class EmailAccountsService {
   }
 
   static async getByIdWithPassword(id) {
-    const account = await EmailAccount.findOne({ _id: id, deletedAt: null }).lean();
+    const account = await EmailAccount.findOne({ _id: id, deletedAt: null })
+      .select('+smtpPasswordEncrypted')
+      .lean();
     if (!account) return null;
     return account;
   }
