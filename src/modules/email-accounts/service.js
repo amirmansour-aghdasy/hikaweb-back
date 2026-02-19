@@ -145,7 +145,9 @@ export class EmailAccountsService {
       auth: {
         user: account.smtpUser,
         pass: password
-      }
+      },
+      // قبول گواهی خودامضا (مثلاً mail.hikaweb.ir) برای اتصال SMTP
+      tls: { rejectUnauthorized: false }
     });
   }
 
