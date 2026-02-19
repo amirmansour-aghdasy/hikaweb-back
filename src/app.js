@@ -76,7 +76,7 @@ class App {
       await SystemLogger.logDatabaseConnection('success', {
         uri: config.MONGODB_URI?.replace(/\/\/.*@/, '//***@') // Hide credentials
       });
-      
+
       const connections = [
         { name: 'MongoDB', status: 'success' }
       ];

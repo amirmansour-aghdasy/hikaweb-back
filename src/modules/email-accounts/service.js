@@ -72,10 +72,30 @@ export class EmailAccountsService {
   }
 
   static async update(id, data, userId) {
-    const account = await EmailAccount.findOne({ _id: id, deletedAt: null });
+    const account = await EmailAccount.findOne({ _id: id, deletedAt: null })
+      .select('+smtpPasswordEncrypted');
     if (!account) return null;
-    if (data.smtpPassword !== undefined && data.smtpPassword !== '') {
-      account.smtpPasswordEncrypted = encrypt(data.smtpPassword);
+    const hasImap = !!(account.imapHost && String(account.imapHost).trim());
+    const incomingPassword = data.smtpPassword !== undefined && String(data.smtpPassword).trim() !== ''
+      ? String(data.smtpPassword).trim()
+      : null;
+    if (incomingPassword) {
+      account.smtpPasswordEncrypted = encrypt(incomingPassword);
+    } else if (hasImap) {
+      let currentPassword = '';
+      if (account.smtpPasswordEncrypted) {
+        try {
+          currentPassword = decrypt(account.smtpPasswordEncrypted) || '';
+        } catch (_) {
+          currentPassword = '';
+        }
+      }
+      if (!currentPassword || !currentPassword.trim()) {
+        throw new AppError(
+          'برای استفاده از صندوق ورودی باید رمز عبور را در این فرم وارد و ذخیره کنید. فیلد «رمز عبور SMTP» را پر کنید.',
+          400
+        );
+      }
     }
     delete data.smtpPassword;
     if (data.isDefault === true) {
@@ -186,7 +206,14 @@ export class EmailAccountsService {
   }
 
   static getImapConfig(account) {
-    const password = account.smtpPasswordEncrypted ? decrypt(account.smtpPasswordEncrypted) : '';
+    let password = '';
+    if (account.smtpPasswordEncrypted) {
+      try {
+        password = decrypt(account.smtpPasswordEncrypted) || '';
+      } catch (_) {
+        password = '';
+      }
+    }
     const host = (account.imapHost && account.imapHost.trim()) ? account.imapHost.trim() : account.smtpHost;
     const port = account.imapPort ?? 993;
     const secure = account.imapSecure !== false;
@@ -200,6 +227,17 @@ export class EmailAccountsService {
     };
   }
 
+  /** برای صندوق ورودی: اگر رمز خالی باشد خطای واضح بده. */
+  static ensureImapPassword(account) {
+    const config = EmailAccountsService.getImapConfig(account);
+    if (!config.auth.pass || !config.auth.pass.trim()) {
+      throw new AppError(
+        'برای این حساب رمز عبور ذخیره نشده است. در «حساب‌های ایمیل» حساب را ویرایش کنید و رمز عبور را وارد و ذخیره کنید.',
+        400
+      );
+    }
+  }
+
   static async getInbox(accountId, query = {}) {
     const account = await EmailAccountsService.getByIdWithPassword(accountId);
     if (!account) throw new AppError('حساب ایمیل یافت نشد.', 404);
@@ -207,6 +245,7 @@ export class EmailAccountsService {
     if (!imapHost) {
       throw new AppError('برای این حساب IMAP تنظیم نشده. در ویرایش حساب، فیلد «سرور IMAP» را پر کنید.', 400);
     }
+    EmailAccountsService.ensureImapPassword(account);
     const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 20));
     const page = Math.max(1, parseInt(query.page, 10) || 1);
     let client;
@@ -247,15 +286,18 @@ export class EmailAccountsService {
       logger.error('IMAP getInbox error', { accountId, error: err.message, stack: err.stack });
       const msg = err.message || String(err);
       const sensitive = /password|secret|token|key|decrypt|ENCRYPTION/i.test(msg);
+      const noPassword = /no password configured|password.*empty/i.test(msg);
       throw new AppError(
-        msg.includes('Invalid credentials') || msg.includes('Authentication failed')
-          ? 'نام کاربری یا رمز عبور IMAP اشتباه است. حساب را در «حساب‌های ایمیل» بررسی کنید.'
-          : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
-            ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
-            : sensitive
-              ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب و رمز عبور را در «حساب‌های ایمیل» بررسی کنید.'
-              : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
-        502
+        noPassword
+          ? 'برای این حساب رمز عبور ذخیره نشده است. در «حساب‌های ایمیل» حساب را ویرایش کنید و رمز عبور را وارد و ذخیره کنید.'
+          : msg.includes('Invalid credentials') || msg.includes('Authentication failed')
+            ? 'نام کاربری یا رمز عبور IMAP اشتباه است. حساب را در «حساب‌های ایمیل» بررسی کنید.'
+            : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
+              ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
+              : sensitive
+                ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب و رمز عبور را در «حساب‌های ایمیل» بررسی کنید.'
+                : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+        noPassword ? 400 : 502
       );
     } finally {
       if (client) {
@@ -273,6 +315,7 @@ export class EmailAccountsService {
     if (!account) throw new AppError('حساب ایمیل یافت نشد.', 404);
     const imapHost = (account.imapHost && account.imapHost.trim()) || null;
     if (!imapHost) throw new AppError('برای این حساب IMAP تنظیم نشده.', 400);
+    EmailAccountsService.ensureImapPassword(account);
     let client;
     try {
       client = new ImapFlow(EmailAccountsService.getImapConfig(account));
@@ -319,15 +362,18 @@ export class EmailAccountsService {
       logger.error('IMAP getInboxMessage error', { accountId, uid, error: err.message, stack: err.stack });
       const msg = err.message || String(err);
       const sensitive = /password|secret|token|key|decrypt|ENCRYPTION/i.test(msg);
+      const noPassword = /no password configured|password.*empty/i.test(msg);
       throw new AppError(
-        msg.includes('Invalid credentials') || msg.includes('Authentication failed')
-          ? 'نام کاربری یا رمز عبور IMAP اشتباه است.'
-          : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
-            ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
-            : sensitive
-              ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب را بررسی کنید.'
-              : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
-        502
+        noPassword
+          ? 'برای این حساب رمز عبور ذخیره نشده است. در «حساب‌های ایمیل» حساب را ویرایش کنید و رمز عبور را وارد و ذخیره کنید.'
+          : msg.includes('Invalid credentials') || msg.includes('Authentication failed')
+            ? 'نام کاربری یا رمز عبور IMAP اشتباه است.'
+            : msg.includes('ENCRYPTION_KEY') || msg.includes('decrypt')
+              ? 'خطای پیکربندی سرور (رمزنگاری). با مدیر تماس بگیرید.'
+              : sensitive
+                ? 'اتصال به صندوق ورودی برقرار نشد. تنظیمات حساب را بررسی کنید.'
+                : `اتصال به صندوق ورودی برقرار نشد: ${msg}`,
+        noPassword ? 400 : 502
       );
     } finally {
       if (client) {

@@ -11,8 +11,8 @@ const emailAccountSchema = new mongoose.Schema(
       type: String,
       required: [true, 'آدرس ایمیل الزامی است'],
       trim: true,
-      lowercase: true,
-      unique: true
+      lowercase: true
+      // یونیک فقط برای سندهای غیرحذف‌شده؛ از طریق ایندکس partialFilterExpression پایین
     },
     displayName: {
       type: String,
@@ -61,11 +61,32 @@ const emailAccountSchema = new mongoose.Schema(
   }
 );
 
-emailAccountSchema.index({ address: 1 }, { unique: true });
+// یونیک فقط برای حساب‌های غیرحذف‌شده تا بعد از حذف نرم بتوان همان آدرس را دوباره ثبت کرد
+emailAccountSchema.index(
+  { address: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 emailAccountSchema.index({ deletedAt: 1 });
 emailAccountSchema.index({ isDefault: 1 });
 
 Object.assign(emailAccountSchema.methods, baseSchemaMethods);
 Object.assign(emailAccountSchema.statics, baseSchemaStatics);
+
+/**
+ * حذف ایندکس قدیمی یونیک address (بدون partial) تا بتوان بعد از حذف نرم همان آدرس را دوباره ثبت کرد.
+ * یک بار بعد از دیپلوی کافی است.
+ */
+export async function ensureEmailAccountAddressIndex() {
+  const coll = EmailAccount.collection;
+  const indexes = await coll.indexes();
+  const oldAddressIndex = indexes.find(
+    (idx) => idx.key?.address === 1 && !idx.partialFilterExpression
+  );
+  if (oldAddressIndex && oldAddressIndex.name) {
+    await coll.dropIndex(oldAddressIndex.name);
+    // eslint-disable-next-line no-console
+    console.log(`Dropped old email account index: ${oldAddressIndex.name}`);
+  }
+}
 
 export const EmailAccount = mongoose.model('EmailAccount', emailAccountSchema);

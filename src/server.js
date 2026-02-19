@@ -24,6 +24,10 @@ async function startServer() {
 
       logger.info(`Server started successfully on port ${config.PORT}`);
 
+      if (!config.ENCRYPTION_KEY) {
+        logger.warn('ENCRYPTION_KEY is not set (and JWT_SECRET fallback is empty). Email account passwords cannot be decrypted. Add ENCRYPTION_KEY or JWT_SECRET to .env and restart.');
+      }
+
       // Log system startup
       await SystemLogger.logStartup({
         port: config.PORT,
