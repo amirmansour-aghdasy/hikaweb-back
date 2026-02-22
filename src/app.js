@@ -59,6 +59,7 @@ import paymentRoutes from './modules/payments/routes.js';
 import shippingRoutes from './modules/shipping/routes.js';
 import couponRoutes from './modules/coupons/routes.js';
 import emailAccountsRoutes from './modules/email-accounts/routes.js';
+import chatRoutes from './modules/chat/routes.js';
 import { SystemLogger } from './utils/systemLogger.js';
 
 class App {
@@ -274,6 +275,7 @@ class App {
     apiRouter.use('/shipping', shippingRoutes);
     apiRouter.use('/coupons', couponRoutes);
     apiRouter.use('/email-accounts', emailAccountsRoutes);
+    apiRouter.use('/chat', chatRoutes);
 
     // Mount API routes
     this.app.use('/api/v1', apiRouter);
@@ -314,7 +316,8 @@ class App {
           carousel: '/api/v1/carousel',
           logs: '/api/v1/logs',
           tasks: '/api/v1/tasks',
-          calendar: '/api/v1/calendar'
+          calendar: '/api/v1/calendar',
+          chat: '/api/v1/chat'
         },
         contact: {
           website: 'https://hikaweb.ir',

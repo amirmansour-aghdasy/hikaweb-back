@@ -3,6 +3,7 @@ import { Task } from './model.js';
 import { User } from '../auth/model.js';
 import { Notification } from '../notifications/model.js';
 import { smsService } from '../../utils/sms.js';
+import { emailService } from '../../utils/email.js';
 import { logger } from '../../utils/logger.js';
 import { LogService } from '../logs/service.js';
 
@@ -41,6 +42,22 @@ export class TaskService {
           priority: task.priority,
           actionUrl: `/dashboard/tasks/${task._id}`
         });
+      }
+
+      // Send email notification if enabled
+      if (task.notifications.email && task.assignee?.email) {
+        try {
+          const assignerName = task.assigner?.name || '';
+          await emailService.sendTaskAssigned(
+            task.assignee.email,
+            task.assignee.name,
+            task.title,
+            task.dueDate || null,
+            assignerName
+          );
+        } catch (emailError) {
+          logger.error('Failed to send email notification for task:', emailError);
+        }
       }
 
       // Send SMS notification if enabled
@@ -220,6 +237,14 @@ export class TaskService {
 
       const oldStatus = task.status;
       const oldData = task.toObject();
+
+      // نرمال‌سازی وضعیت تسک‌های قدیمی (active از baseSchema) به pending
+      if (updateData.status === 'active') {
+        updateData.status = 'pending';
+      }
+      if (task.status === 'active') {
+        task.status = 'pending';
+      }
 
       // Update task
       Object.assign(task, updateData);
@@ -457,10 +482,12 @@ export class TaskService {
         })
       ]);
 
+      // تسک‌های قدیمی ممکن است status برابر 'active' (از baseSchema) داشته باشند؛ به‌عنوان 'pending' گزارش می‌شود
       return {
         total,
         byStatus: byStatus.reduce((acc, item) => {
-          acc[item._id] = item.count;
+          const key = item._id === 'active' ? 'pending' : item._id;
+          acc[key] = (acc[key] || 0) + item.count;
           return acc;
         }, {}),
         byPriority: byPriority.reduce((acc, item) => {

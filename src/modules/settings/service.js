@@ -120,6 +120,9 @@ export class SettingsService {
                 settings.markModified('whatsapp.agents');
               }
             }
+            if (key === 'announcementBar') {
+              settings.markModified('announcementBar');
+            }
           } else {
             settings[key] = cleanedUpdateData[key];
             settings.markModified(key);
@@ -195,6 +198,13 @@ export class SettingsService {
         maintenanceMode: settings.system?.maintenanceMode || {
           enabled: false,
           message: { fa: '', en: '' }
+        },
+        announcementBar: settings.announcementBar || {
+          enabled: true,
+          text: 'تخفیف ویژه نوروز — تا ۲۰٪ برای خدمات منتخب',
+          link: '/pricing',
+          durationDays: 7,
+          autoRenew: true
         }
       };
     } catch (error) {

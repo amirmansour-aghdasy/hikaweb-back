@@ -5,6 +5,9 @@ import {
   baseSchemaStatics
 } from '../../shared/models/baseModel.js';
 
+// Task has its own status (pending/in_progress/completed/cancelled); exclude base status (active/inactive/archived)
+const { status: _baseStatus, ...restBaseFields } = baseSchemaFields;
+
 const taskSchema = new mongoose.Schema(
   {
     title: {
@@ -104,7 +107,7 @@ const taskSchema = new mongoose.Schema(
       default: false
     },
     
-    ...baseSchemaFields
+    ...restBaseFields
   },
   {
     timestamps: true,

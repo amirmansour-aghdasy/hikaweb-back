@@ -37,6 +37,89 @@ export const updateSettingsSchema = Joi.object({
     })
   }).optional(),
 
+  email: Joi.object({
+    smtp: Joi.object({
+      host: Joi.string().allow(''),
+      port: Joi.number(),
+      secure: Joi.boolean(),
+      user: Joi.string().allow(''),
+      password: Joi.string().allow('')
+    }),
+    from: Joi.object({
+      name: Joi.string().allow(''),
+      email: Joi.string().email().allow('')
+    }),
+    templates: Joi.object({
+      welcome: Joi.object({
+        subject: Joi.object({ fa: Joi.string(), en: Joi.string() }),
+        body: Joi.object({ fa: Joi.string(), en: Joi.string() })
+      }),
+      passwordReset: Joi.object({
+        subject: Joi.object({ fa: Joi.string(), en: Joi.string() }),
+        body: Joi.object({ fa: Joi.string(), en: Joi.string() })
+      })
+    }),
+    notifications: Joi.object({
+      newUser: Joi.boolean(),
+      newComment: Joi.boolean(),
+      newTicket: Joi.boolean()
+    })
+  }).optional(),
+
+  security: Joi.object({
+    rateLimit: Joi.object({
+      enabled: Joi.boolean(),
+      maxRequests: Joi.number()
+    }),
+    password: Joi.object({
+      minLength: Joi.number(),
+      requireUppercase: Joi.boolean(),
+      requireNumbers: Joi.boolean()
+    }),
+    security: Joi.object({
+      maxLoginAttempts: Joi.number(),
+      enableCsrfProtection: Joi.boolean()
+    })
+  }).optional(),
+
+  media: Joi.object({
+    storage: Joi.object({
+      provider: Joi.string(),
+      maxFileSize: Joi.number(),
+      allowedTypes: Joi.array().items(Joi.string())
+    })
+  }).optional(),
+
+  notifications: Joi.object({
+    telegram: Joi.object({
+      enabled: Joi.boolean(),
+      botToken: Joi.string().allow(''),
+      chatId: Joi.string().allow('')
+    }),
+    sms: Joi.object({
+      enabled: Joi.boolean(),
+      apiKey: Joi.string().allow(''),
+      sender: Joi.string().allow('')
+    })
+  }).optional(),
+
+  theme: Joi.object({
+    colors: Joi.object({
+      primary: Joi.string(),
+      secondary: Joi.string(),
+      background: Joi.string()
+    }),
+    typography: Joi.object({
+      fontFamily: Joi.string(),
+      fontSize: Joi.number()
+    }),
+    features: Joi.object({
+      darkMode: Joi.boolean(),
+      rtlSupport: Joi.boolean(),
+      animations: Joi.boolean()
+    })
+  }).optional(),
+
   socialMedia: Joi.object({
     instagram: Joi.string().allow(''),
     telegram: Joi.string().allow(''),
@@ -114,5 +197,13 @@ export const updateSettingsSchema = Joi.object({
       autoCloseTimer: Joi.number().min(0).optional(),
       notificationBadge: Joi.number().min(0).allow(null).optional()
     }).optional()
+  }).optional(),
+
+  announcementBar: Joi.object({
+    enabled: Joi.boolean().optional(),
+    text: Joi.string().trim().allow('').optional(),
+    link: Joi.string().trim().allow('').optional(),
+    durationDays: Joi.number().min(1).max(365).optional(),
+    autoRenew: Joi.boolean().optional()
   }).optional()
 });

@@ -2,19 +2,37 @@
 //   await import('dotenv/config');
 // }
 import 'dotenv/config';
+import http from 'http';
+import { Server as SocketServer } from 'socket.io';
 import { config } from './config/environment.js';
 import { logger } from './utils/logger.js';
 import { PrettyLogger } from './utils/prettyLogger.js';
 import { SystemLogger } from './utils/systemLogger.js';
 import { schedulerService } from './services/scheduler.js';
 import App from './app.js';
+import { initChatSocket } from './modules/chat/socket.js';
 
 async function startServer() {
   try {
     const appInstance = new App();
     const app = appInstance.getExpressApp();
 
-    const server = app.listen(config.PORT, async () => {
+    const server = http.createServer(app);
+
+    const corsOrigins = config.NODE_ENV === 'production'
+      ? ['https://hikaweb.ir', 'https://www.hikaweb.ir', 'https://dashboard.hikaweb.ir']
+      : ['http://localhost:1281', 'http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:1281', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001'];
+
+    const io = new SocketServer(server, {
+      path: '/socket.io',
+      cors: { origin: corsOrigins, credentials: true },
+      pingTimeout: 60000,
+      pingInterval: 25000
+    });
+    initChatSocket(io);
+    app.set('io', io);
+
+    server.listen(config.PORT, async () => {
       // Display beautiful startup banner
       PrettyLogger.startupBanner(
         config.PORT,

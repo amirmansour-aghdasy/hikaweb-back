@@ -71,6 +71,66 @@ class EmailService {
       throw new Error('خطا در ارسال ایمیل');
     }
   }
+
+  /**
+   * ارسال ایمیل اطلاع‌رسانی اختصاص وظیفه به کاربر
+   * @param {string} toEmail - ایمیل گیرنده (اختصاص‌داده‌شده)
+   * @param {string} assigneeName - نام گیرنده
+   * @param {string} taskTitle - عنوان وظیفه
+   * @param {Date|null} dueDate - مهلت (اختیاری)
+   * @param {string} [assignerName] - نام اختصاص‌دهنده (اختیاری)
+   */
+  async sendTaskAssigned(toEmail, assigneeName, taskTitle, dueDate = null, assignerName = '') {
+    if (!toEmail || typeof toEmail !== 'string' || !toEmail.trim()) return false;
+    const dueStr = dueDate
+      ? new Date(dueDate).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' })
+      : 'تعیین نشده';
+    const byStr = assignerName ? ` توسط ${assignerName}` : '';
+    const subject = `وظیفه جدید: ${taskTitle}`;
+    const html = `
+      <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <h2 style="color: #333; text-align: center; margin-bottom: 30px;">وظیفه جدید</h2>
+          <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+            سلام ${assigneeName || 'کاربر'}،
+          </p>
+          <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+            یک وظیفه جدید${byStr} به شما اختصاص داده شده است.
+          </p>
+          <div style="background-color: #f0f0f0; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>عنوان:</strong> ${taskTitle}</p>
+            <p style="margin: 0;"><strong>مهلت:</strong> ${dueStr}</p>
+          </div>
+          <p style="color: #999; font-size: 14px; line-height: 1.6; margin-top: 20px;">
+            برای مشاهده جزئیات به پنل مدیریت مراجعه کنید.
+          </p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">
+            آژانس دیجیتال مارکتینگ هیکاوب
+          </p>
+        </div>
+      </div>
+    `;
+    try {
+      const mailOptions = {
+        from: config.SMTP_FROM || config.SMTP_USER || 'noreply@hikaweb.com',
+        to: toEmail.trim(),
+        subject,
+        html
+      };
+      if (this.transporter) {
+        await this.transporter.sendMail(mailOptions);
+        logger.info(`Task assignment email sent to ${toEmail}`);
+        return true;
+      }
+      logger.info(`[DEV] Task assignment email would be sent to ${toEmail}: ${taskTitle}`);
+      logger.warn('SMTP not configured. Task notification email not sent.');
+      return false;
+    } catch (error) {
+      logger.error('Task assignment email failed:', error);
+      return false;
+    }
+  }
 }
 
 export const emailService = new EmailService();

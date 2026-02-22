@@ -311,6 +311,31 @@ const settingsSchema = new mongoose.Schema(
       }
     },
 
+    announcementBar: {
+      enabled: {
+        type: Boolean,
+        default: true
+      },
+      text: {
+        type: String,
+        default: 'تخفیف ویژه نوروز — تا ۲۰٪ برای خدمات منتخب'
+      },
+      link: {
+        type: String,
+        default: '/pricing'
+      },
+      durationDays: {
+        type: Number,
+        default: 7,
+        min: 1,
+        max: 365
+      },
+      autoRenew: {
+        type: Boolean,
+        default: true
+      }
+    },
+
     ...baseSchemaFields
   },
   {
