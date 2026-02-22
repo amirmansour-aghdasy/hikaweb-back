@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config/environment.js';
 import { logger } from './logger.js';
+import { EmailAccountsService } from '../modules/email-accounts/service.js';
 
 class EmailService {
   constructor() {
@@ -111,20 +112,34 @@ class EmailService {
         </div>
       </div>
     `;
+    const to = toEmail.trim();
+    const mailOptions = { to, subject, html };
+
     try {
-      const mailOptions = {
-        from: config.SMTP_FROM || config.SMTP_USER || 'noreply@hikaweb.com',
-        to: toEmail.trim(),
-        subject,
-        html
-      };
-      if (this.transporter) {
-        await this.transporter.sendMail(mailOptions);
-        logger.info(`Task assignment email sent to ${toEmail}`);
+      // اول با حساب ایمیل پیش‌فرض (همان مدیریت ایمیل داشبورد) ارسال کن
+      const account = await EmailAccountsService.getDefaultAccount();
+      if (account) {
+        const transporter = EmailAccountsService.createTransporter(account);
+        const from = account.displayName
+          ? `${account.displayName} <${account.address}>`
+          : account.address;
+        await transporter.sendMail({ ...mailOptions, from });
+        logger.info(`Task assignment email sent to ${to} via account ${account.address}`);
         return true;
       }
-      logger.info(`[DEV] Task assignment email would be sent to ${toEmail}: ${taskTitle}`);
-      logger.warn('SMTP not configured. Task notification email not sent.');
+    } catch (accountErr) {
+      logger.warn('Task email via default account failed, trying env SMTP:', accountErr?.message || accountErr);
+    }
+
+    // در صورت نبود حساب یا خطا: fallback به SMTP سراسری (env)
+    try {
+      mailOptions.from = config.SMTP_FROM || config.SMTP_USER || 'noreply@hikaweb.com';
+      if (this.transporter) {
+        await this.transporter.sendMail(mailOptions);
+        logger.info(`Task assignment email sent to ${to}`);
+        return true;
+      }
+      logger.warn('SMTP not configured (no default email account and no env). Task notification email not sent.');
       return false;
     } catch (error) {
       logger.error('Task assignment email failed:', error);
